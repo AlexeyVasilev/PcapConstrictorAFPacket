@@ -62,7 +62,9 @@ OfflinePacketFeedResult OfflinePacketFeed::Run(const std::filesystem::path& inpu
     }
 
     const std::uint32_t output_snaplen =
-        std::min(config.capture.default_snaplen, config.capture.max_capture_len);
+        reader.global_header().snaplen != 0U
+            ? reader.global_header().snaplen
+            : std::min(config.capture.default_snaplen, config.capture.max_capture_len);
     PcapWriter writer(output_stream, output_snaplen);
     LiveCapturePolicy policy(config);
 

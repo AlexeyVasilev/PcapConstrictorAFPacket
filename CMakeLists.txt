@@ -40,6 +40,7 @@ add_executable(PcapConstrictorAFPacketTests
     tests/AfPacketCaptureTests.cpp
     tests/TestMain.cpp
     tests/ConfigLoaderTests.cpp
+    tests/GoldenOfflineWorkflowTests.cpp
     tests/LivePolicyClassificationTests.cpp
     tests/LivePolicyQuicTests.cpp
     tests/LivePolicySmokeTests.cpp
@@ -54,6 +55,13 @@ add_executable(PcapConstrictorAFPacketTests
 target_link_libraries(PcapConstrictorAFPacketTests
     PRIVATE
         PcapConstrictorAFPacketCore
+)
+
+target_compile_definitions(PcapConstrictorAFPacketTests
+    PRIVATE
+        PCAP_CONSTRICTOR_AFPACKET_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+        PCAP_CONSTRICTOR_AFPACKET_BINARY_DIR="${CMAKE_CURRENT_BINARY_DIR}"
+        PCAP_CONSTRICTOR_AFPACKET_EXE_PATH="$<TARGET_FILE:PcapConstrictorAFPacket>"
 )
 
 if(BUILD_TESTING)

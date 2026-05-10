@@ -7,6 +7,7 @@
 #include "decode/PacketDecode.hpp"
 #include "policy/PolicyConfig.hpp"
 #include "policy/QuicConstrictor.hpp"
+#include "policy/TlsConstrictor.hpp"
 
 namespace pcap_constrictor_afpacket {
 
@@ -47,6 +48,7 @@ public:
 
 private:
     PolicyConfig config_;
+    TlsConstrictor tls_constrictor_{};
     QuicConstrictor quic_constrictor_{};
 };
 

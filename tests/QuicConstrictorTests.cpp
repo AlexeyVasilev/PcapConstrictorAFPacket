@@ -69,6 +69,9 @@ int RunQuicConstrictorTests() {
         std::byte{0x11}, std::byte{0x12}, std::byte{0x13}, std::byte{0x14},
         std::byte{0x04},
         std::byte{0xaa}, std::byte{0xab}, std::byte{0xac}, std::byte{0xad},
+        std::byte{0x00},
+        std::byte{0x04},
+        std::byte{0xde}, std::byte{0xad}, std::byte{0xbe}, std::byte{0xef},
     };
 
     const std::vector<std::byte> matching_short_payload{

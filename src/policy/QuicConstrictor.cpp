@@ -13,6 +13,9 @@ namespace pcap_constrictor_afpacket {
 namespace {
 
 struct LongHeaderInfo {
+    std::size_t total_size{0};
+    std::uint8_t packet_type{0};
+    std::uint32_t version{0};
     QuicConstrictor::ConnectionId dcid{};
     QuicConstrictor::ConnectionId scid{};
 };
@@ -29,6 +32,14 @@ std::uint32_t ReadBe32(const std::span<const std::byte> bytes,
            (static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(bytes[offset + 1U])) << 16U) |
            (static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(bytes[offset + 2U])) << 8U) |
            static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(bytes[offset + 3U]));
+}
+
+bool IsLongHeader(const std::uint8_t first_byte) noexcept {
+    return (first_byte & 0x80U) != 0U;
+}
+
+bool IsShortHeaderCompatible(const std::uint8_t first_byte) noexcept {
+    return (first_byte & 0x80U) == 0U && (first_byte & 0x40U) != 0U;
 }
 
 bool PortConfigured(const std::vector<std::uint16_t>& ports, const std::uint16_t port) noexcept {
@@ -124,31 +135,77 @@ bool ReadConnectionId(const std::span<const std::byte> payload,
     return true;
 }
 
-bool ParseLongHeader(const std::span<const std::byte> payload,
-                     LongHeaderInfo& out) noexcept {
-    if (!HasBytes(payload, 0U, 7U)) {
+bool ReadVarint(const std::span<const std::byte> bytes,
+                std::size_t& offset,
+                std::uint64_t& value) noexcept {
+    if (!HasBytes(bytes, offset, 1U)) {
         return false;
     }
 
-    const auto first_byte = std::to_integer<std::uint8_t>(payload[0]);
-    if ((first_byte & 0x80U) == 0U) {
+    const auto first = std::to_integer<std::uint8_t>(bytes[offset]);
+    const auto length = static_cast<std::size_t>(1U) << (first >> 6U);
+    if (!HasBytes(bytes, offset, length)) {
+        return false;
+    }
+
+    value = static_cast<std::uint64_t>(first & 0x3FU);
+    for (std::size_t index = 1; index < length; ++index) {
+        value = (value << 8U) | std::to_integer<std::uint8_t>(bytes[offset + index]);
+    }
+    offset += length;
+    return true;
+}
+
+bool ParseLongHeader(const std::span<const std::byte> payload,
+                     const std::size_t start,
+                     LongHeaderInfo& out) noexcept {
+    if (!HasBytes(payload, start, 7U)) {
+        return false;
+    }
+
+    const auto first_byte = std::to_integer<std::uint8_t>(payload[start]);
+    if (!IsLongHeader(first_byte)) {
         return false;
     }
 
     out = {};
-    std::size_t offset = 1U;
-    if (!HasBytes(payload, offset, 4U)) {
+    out.packet_type = static_cast<std::uint8_t>((first_byte >> 4U) & 0x03U);
+    out.version = ReadBe32(payload, start + 1U);
+    if (out.version == 0U) {
         return false;
     }
 
-    static_cast<void>(ReadBe32(payload, offset));
-    offset += 4U;
+    std::size_t offset = start + 5U;
 
     if (!ReadConnectionId(payload, offset, out.dcid) ||
         !ReadConnectionId(payload, offset, out.scid)) {
         return false;
     }
 
+    if (out.packet_type == 0U) {
+        std::uint64_t token_length = 0U;
+        if (!ReadVarint(payload, offset, token_length) ||
+            token_length > payload.size() ||
+            !HasBytes(payload, offset, static_cast<std::size_t>(token_length))) {
+            return false;
+        }
+        offset += static_cast<std::size_t>(token_length);
+    } else if (out.packet_type == 3U) {
+        out.total_size = payload.size() - start;
+        return true;
+    }
+
+    std::uint64_t packet_length = 0U;
+    if (!ReadVarint(payload, offset, packet_length)) {
+        return false;
+    }
+
+    if (packet_length > payload.size() ||
+        !HasBytes(payload, offset, static_cast<std::size_t>(packet_length))) {
+        return false;
+    }
+
+    out.total_size = offset + static_cast<std::size_t>(packet_length) - start;
     return true;
 }
 
@@ -211,22 +268,38 @@ QuicConstrictResult QuicConstrictor::Evaluate(std::span<const std::byte> packet,
     }
 
     const auto [flow_key, direction] = MakeCanonicalFlow(decoded);
-    const auto first_byte = std::to_integer<std::uint8_t>(payload[0]);
-
-    if ((first_byte & 0x80U) != 0U) {
+    std::size_t offset = 0U;
+    bool saw_long_header = false;
+    while (offset < payload.size() &&
+           IsLongHeader(std::to_integer<std::uint8_t>(payload[offset]))) {
         LongHeaderInfo long_header{};
-        if (!ParseLongHeader(payload, long_header)) {
+        if (!ParseLongHeader(payload, offset, long_header)) {
             return {.disposition = QuicConstrictDisposition::MalformedFallback};
         }
 
+        saw_long_header = true;
         auto& flow_state = flow_states_[flow_key];
-        if (direction == FlowDirection::AToB) {
-            flow_state.endpoint_a_scid = long_header.scid;
-        } else {
-            flow_state.endpoint_b_scid = long_header.scid;
+        if (long_header.scid.known && long_header.scid.length > 0U) {
+            if (direction == FlowDirection::AToB) {
+                flow_state.endpoint_a_scid = long_header.scid;
+            } else {
+                flow_state.endpoint_b_scid = long_header.scid;
+            }
         }
+        offset += long_header.total_size;
+    }
 
-        return {.disposition = QuicConstrictDisposition::LongHeader};
+    if (offset == payload.size()) {
+        return saw_long_header
+                   ? QuicConstrictResult{.disposition = QuicConstrictDisposition::LongHeader}
+                   : QuicConstrictResult{};
+    }
+
+    const auto first_byte = std::to_integer<std::uint8_t>(payload[offset]);
+    if (!IsShortHeaderCompatible(first_byte)) {
+        return saw_long_header
+                   ? QuicConstrictResult{.disposition = QuicConstrictDisposition::MalformedFallback}
+                   : QuicConstrictResult{};
     }
 
     const auto found = flow_states_.find(flow_key);
@@ -248,16 +321,17 @@ QuicConstrictResult QuicConstrictor::Evaluate(std::span<const std::byte> packet,
             .disposition = QuicConstrictDisposition::ShortHeaderMatched,
             .output_len = static_cast<std::uint32_t>(
                 decoded.transport_payload_offset +
-                std::min<std::size_t>(payload.size(), keep_payload_bytes)),
+                offset +
+                std::min<std::size_t>(payload.size() - offset, keep_payload_bytes)),
         };
     }
 
     const std::size_t required_prefix_bytes = 1U + expected_dcid->length;
-    if (!HasBytes(payload, 0U, required_prefix_bytes)) {
+    if (!HasBytes(payload, offset, required_prefix_bytes)) {
         return {.disposition = QuicConstrictDisposition::MalformedFallback};
     }
 
-    if (!ConnectionIdMatches(*expected_dcid, payload, 1U)) {
+    if (!ConnectionIdMatches(*expected_dcid, payload, offset + 1U)) {
         return {.disposition = QuicConstrictDisposition::DcidMismatchFallback};
     }
 
@@ -267,7 +341,8 @@ QuicConstrictResult QuicConstrictor::Evaluate(std::span<const std::byte> packet,
         .disposition = QuicConstrictDisposition::ShortHeaderMatched,
         .output_len = static_cast<std::uint32_t>(
             decoded.transport_payload_offset +
-            std::min<std::size_t>(payload.size(), keep_payload_bytes)),
+            offset +
+            std::min<std::size_t>(payload.size() - offset, keep_payload_bytes)),
     };
 }
 

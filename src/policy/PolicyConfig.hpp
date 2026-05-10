@@ -8,6 +8,10 @@
 namespace pcap_constrictor_afpacket {
 
 struct PolicyConfig {
+    struct GeneralOptions {
+        std::uint32_t min_saved_bytes_per_packet{16};
+    } general;
+
     struct CaptureOptions {
         std::string interface{};
         std::uint32_t default_snaplen{65535};

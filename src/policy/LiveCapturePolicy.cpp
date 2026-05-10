@@ -16,6 +16,21 @@ bool PortConfigured(const std::vector<std::uint16_t>& ports, const std::uint16_t
     return std::find(ports.begin(), ports.end(), port) != ports.end();
 }
 
+std::uint32_t ApplyMinimumSavingsThreshold(const std::uint32_t baseline_output_len,
+                                           const std::uint32_t candidate_output_len,
+                                           const std::uint32_t min_saved_bytes_per_packet) noexcept {
+    if (candidate_output_len >= baseline_output_len) {
+        return baseline_output_len;
+    }
+
+    const std::uint32_t saved_bytes = baseline_output_len - candidate_output_len;
+    if (saved_bytes < min_saved_bytes_per_packet) {
+        return baseline_output_len;
+    }
+
+    return candidate_output_len;
+}
+
 }  // namespace
 
 std::string_view LiveCaptureDecision::reason_string() const noexcept {
@@ -106,18 +121,21 @@ LiveCaptureDecision LiveCapturePolicy::Evaluate(const CapturedPacket& packet) no
         decoded.failure_reason == PacketDecodeFailureReason::None &&
         reason == DecisionReason::TlsCandidate &&
         decoded.transport_payload_length > 0U) {
-        const TlsConstrictResult tls_result = TlsConstrictor::Evaluate(
+        const TlsConstrictResult tls_result = tls_constrictor_.Evaluate(
             std::span<const std::byte>(packet.data().data(), safe_captured_len),
-            decoded.transport_payload_offset,
-            decoded.transport_payload_length,
+            decoded,
             config_.tls);
 
         if (tls_result.disposition == TlsConstrictDisposition::AppDataPrefix) {
-            final_output_len = std::min(output_len, tls_result.output_len);
+            final_output_len = ApplyMinimumSavingsThreshold(
+                output_len,
+                std::min(output_len, tls_result.output_len),
+                config_.general.min_saved_bytes_per_packet);
             if (final_output_len < output_len) {
                 reason = DecisionReason::TlsApplicationDataConstricted;
             }
-        } else if (tls_result.disposition == TlsConstrictDisposition::Malformed) {
+        } else if (tls_result.disposition == TlsConstrictDisposition::Malformed ||
+                   tls_result.disposition == TlsConstrictDisposition::UncertainFallback) {
             reason = DecisionReason::TlsMalformedFallback;
         } else if (tls_result.disposition == TlsConstrictDisposition::NoRecord) {
             reason = DecisionReason::TlsNoRecordFallback;
@@ -134,7 +152,10 @@ LiveCaptureDecision LiveCapturePolicy::Evaluate(const CapturedPacket& packet) no
         if (quic_result.disposition == QuicConstrictDisposition::LongHeader) {
             reason = DecisionReason::QuicLongHeader;
         } else if (quic_result.disposition == QuicConstrictDisposition::ShortHeaderMatched) {
-            final_output_len = std::min(output_len, quic_result.output_len);
+            final_output_len = ApplyMinimumSavingsThreshold(
+                output_len,
+                std::min(output_len, quic_result.output_len),
+                config_.general.min_saved_bytes_per_packet);
             reason = final_output_len < output_len
                          ? DecisionReason::QuicShortHeaderConstricted
                          : DecisionReason::QuicShortHeaderMatched;

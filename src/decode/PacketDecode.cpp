@@ -94,6 +94,11 @@ void DecodeTcp(PacketDecodeResult& result,
     result.transport_payload_length = transport_end - result.transport_payload_offset;
     result.src_port = ReadBe16(packet, transport_offset);
     result.dst_port = ReadBe16(packet, transport_offset + 2U);
+    result.tcp_seq =
+        static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(packet[transport_offset + 4U])) << 24U |
+        static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(packet[transport_offset + 5U])) << 16U |
+        static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(packet[transport_offset + 6U])) << 8U |
+        static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(packet[transport_offset + 7U]));
 }
 
 void DecodeUdp(PacketDecodeResult& result,

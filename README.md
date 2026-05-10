@@ -2,7 +2,7 @@
 
 PcapConstrictorAFPacket is a Linux-oriented live recorder that is planned to reuse PcapConstrictor-style TLS/QUIC-aware adaptive capture logic for AF_PACKET capture.
 
-Current status: offline classic PCAP feed mode is available, basic Linux AF_PACKET live capture is available, Ethernet/IP/TCP/UDP decode scaffolding is available, TLS Application Data constriction is available, and QUIC Long Header CID learning plus matched Short Header constriction is available.
+Current status: offline classic PCAP feed mode is available, basic Linux AF_PACKET live capture is available, Ethernet/IP/TCP/UDP decode scaffolding is available, TLS Application Data constriction is available, QUIC Long Header CID learning plus matched Short Header constriction is available, and golden offline PCAP compatibility tests are available.
 
 ## Current scope
 
@@ -16,6 +16,7 @@ Current status: offline classic PCAP feed mode is available, basic Linux AF_PACK
 - Basic Linux AF_PACKET raw-socket live capture
 - Ethernet/VLAN/IP/TCP/UDP decode scaffolding for policy classification
 - Minimal standalone tests without an external framework
+- Golden offline compatibility tests that compare constrained PCAPs byte-for-byte with inherited PcapConstrictor fixtures
 
 ## Not in this milestone
 
@@ -59,6 +60,20 @@ Current QUIC configuration keys:
 Current QUIC handling is intentionally shallow. This milestone learns source CIDs from QUIC Long Header packets and constricts only matched Short Header packets using the learned destination CID for the opposite direction.
 
 Unknown, malformed, unmapped, or mismatched QUIC short headers fall back conservatively to the existing default `snaplen` / `max_capture_len` behavior.
+
+General configuration keys:
+
+- `general.min_saved_bytes_per_packet`
+
+This threshold applies only to protocol-aware extra constriction. Ordinary `default_snaplen` / `max_capture_len` clamping still behaves independently.
+
+## Tests
+
+- Unit tests cover config parsing, PCAP I/O, decode, TLS, QUIC, and offline/live-policy helper logic.
+- Offline feed tests validate the deterministic `input.pcap -> policy -> output.pcap` path without live capture.
+- Golden offline compatibility tests compare generated constrained PCAPs byte-for-byte against committed expected outputs inherited from PcapConstrictor.
+
+Golden tests do not use live AF_PACKET capture, root privileges, or `CAP_NET_RAW`.
 
 ## Future milestones
 

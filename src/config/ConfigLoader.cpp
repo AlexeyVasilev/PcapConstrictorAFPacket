@@ -165,6 +165,20 @@ bool AssignValue(PolicyConfig& config,
         return invalid_value("unknown key in [capture]");
     }
 
+    if (normalized_section == "general") {
+        std::uint32_t parsed = 0;
+        if (!ParseUint32(value, parsed)) {
+            return invalid_value("invalid unsigned integer for [general]");
+        }
+
+        if (normalized_key == "min_saved_bytes_per_packet") {
+            config.general.min_saved_bytes_per_packet = parsed;
+            return true;
+        }
+
+        return invalid_value("unknown key in [general]");
+    }
+
     if (normalized_section == "tls") {
         if (normalized_key == "enabled") {
             bool parsed = false;

@@ -58,6 +58,7 @@ struct PacketDecodeResult {
 
     std::uint16_t src_port{0};
     std::uint16_t dst_port{0};
+    std::uint32_t tcp_seq{0};
 
     std::array<std::byte, 16> src_address{};
     std::array<std::byte, 16> dst_address{};

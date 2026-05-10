@@ -11,6 +11,7 @@ int RunLivePolicyClassificationTests();
 int RunLivePolicyQuicTests();
 int RunQuicConstrictorTests();
 int RunTlsConstrictorTests();
+int RunGoldenOfflineWorkflowTests();
 
 int main() {
     int failures = 0;
@@ -26,6 +27,7 @@ int main() {
     failures += RunLivePolicyQuicTests();
     failures += RunQuicConstrictorTests();
     failures += RunTlsConstrictorTests();
+    failures += RunGoldenOfflineWorkflowTests();
 
     if (failures == 0) {
         std::cout << "All tests passed.\n";

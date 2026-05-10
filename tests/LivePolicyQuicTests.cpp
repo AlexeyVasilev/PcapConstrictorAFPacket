@@ -75,6 +75,9 @@ int RunLivePolicyQuicTests() {
         std::byte{0x11}, std::byte{0x12}, std::byte{0x13}, std::byte{0x14},
         std::byte{0x04},
         std::byte{0xaa}, std::byte{0xab}, std::byte{0xac}, std::byte{0xad},
+        std::byte{0x00},
+        std::byte{0x04},
+        std::byte{0xde}, std::byte{0xad}, std::byte{0xbe}, std::byte{0xef},
     };
 
     const std::vector<std::byte> matching_short_payload{
@@ -87,6 +90,7 @@ int RunLivePolicyQuicTests() {
         PolicyConfig config;
         config.capture.default_snaplen = 256U;
         config.capture.max_capture_len = 256U;
+        config.general.min_saved_bytes_per_packet = 1U;
         config.quic.short_header_keep_packet_bytes = 2U;
         config.quic.require_dcid_match = true;
         config.quic.allow_short_header_without_known_dcid = false;

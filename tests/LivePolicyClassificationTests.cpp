@@ -49,21 +49,23 @@ int RunLivePolicyClassificationTests() {
         std::byte{0x00}, std::byte{0x00}, std::byte{0x00}, std::byte{0x00},
     };
 
-    constexpr std::array<std::byte, 57> udp443{
+    constexpr std::array<std::byte, 59> udp443{
         std::byte{0x00}, std::byte{0x11}, std::byte{0x22}, std::byte{0x33}, std::byte{0x44}, std::byte{0x55},
         std::byte{0x66}, std::byte{0x77}, std::byte{0x88}, std::byte{0x99}, std::byte{0xaa}, std::byte{0xbb},
         std::byte{0x08}, std::byte{0x00},
-        std::byte{0x45}, std::byte{0x00}, std::byte{0x00}, std::byte{0x2b}, std::byte{0x00}, std::byte{0x01},
+        std::byte{0x45}, std::byte{0x00}, std::byte{0x00}, std::byte{0x2d}, std::byte{0x00}, std::byte{0x01},
         std::byte{0x00}, std::byte{0x00}, std::byte{0x40}, std::byte{0x11}, std::byte{0x00}, std::byte{0x00},
         std::byte{0x0a}, std::byte{0x00}, std::byte{0x00}, std::byte{0x01},
         std::byte{0x0a}, std::byte{0x00}, std::byte{0x00}, std::byte{0x02},
         std::byte{0x15}, std::byte{0xb3}, std::byte{0x01}, std::byte{0xbb},
-        std::byte{0x00}, std::byte{0x17}, std::byte{0x00}, std::byte{0x00},
+        std::byte{0x00}, std::byte{0x19}, std::byte{0x00}, std::byte{0x00},
         std::byte{0xc0}, std::byte{0x00}, std::byte{0x00}, std::byte{0x00}, std::byte{0x01},
         std::byte{0x04},
         std::byte{0x11}, std::byte{0x12}, std::byte{0x13}, std::byte{0x14},
         std::byte{0x04},
         std::byte{0x21}, std::byte{0x22}, std::byte{0x23}, std::byte{0x24},
+        std::byte{0x00},
+        std::byte{0x00},
     };
 
     constexpr std::array<std::byte, 65> tlsAppData443{
@@ -144,6 +146,7 @@ int RunLivePolicyClassificationTests() {
         PolicyConfig config;
         config.capture.default_snaplen = 256U;
         config.capture.max_capture_len = 256U;
+        config.general.min_saved_bytes_per_packet = 1U;
         config.tls.app_data_keep_record_bytes = 2U;
         LiveCapturePolicy policy(config);
         const LiveCaptureDecision decision = policy.Evaluate(
@@ -154,6 +157,24 @@ int RunLivePolicyClassificationTests() {
         }
         if (decision.output_len >= tlsAppData443.size()) {
             return Fail("TLS AppData packet should be shortened when keep bytes are small");
+        }
+    }
+
+    {
+        PolicyConfig config;
+        config.capture.default_snaplen = 256U;
+        config.capture.max_capture_len = 256U;
+        config.general.min_saved_bytes_per_packet = 16U;
+        config.tls.app_data_keep_record_bytes = 2U;
+        LiveCapturePolicy policy(config);
+        const LiveCaptureDecision decision = policy.Evaluate(
+            MakePacket(std::span(tlsAppData443), static_cast<std::uint32_t>(tlsAppData443.size()), 128U));
+
+        if (decision.reason != DecisionReason::TlsCandidate) {
+            return Fail("TLS AppData packet should stay at plain TlsCandidate when savings stay below the threshold");
+        }
+        if (decision.output_len != tlsAppData443.size()) {
+            return Fail("min_saved_bytes_per_packet should block tiny TLS constrictions");
         }
     }
 

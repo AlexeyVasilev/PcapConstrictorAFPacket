@@ -23,6 +23,9 @@ int RunConfigLoaderTests() {
         if (defaults.config.capture.default_snaplen != 65535U) {
             return Fail("default_snaplen default mismatch");
         }
+        if (defaults.config.general.min_saved_bytes_per_packet != 16U) {
+            return Fail("general.min_saved_bytes_per_packet default mismatch");
+        }
         if (defaults.config.capture.max_capture_len != 65535U) {
             return Fail("max_capture_len default mismatch");
         }
@@ -67,6 +70,9 @@ allow_short_header_without_known_dcid = 0
 
 [stats]
 enabled = false
+
+[general]
+min_saved_bytes_per_packet = 24
 )ini";
 
         const ConfigLoadResult parsed = ConfigLoader::LoadFromString(config_text, "parsed.ini");
@@ -77,6 +83,9 @@ enabled = false
         if (parsed.config.capture.default_snaplen != 256U ||
             parsed.config.capture.max_capture_len != 128U) {
             return Fail("capture settings did not parse");
+        }
+        if (parsed.config.general.min_saved_bytes_per_packet != 24U) {
+            return Fail("general.min_saved_bytes_per_packet did not parse");
         }
         if (parsed.config.capture.interface != "eth0") {
             return Fail("capture.interface did not parse");
