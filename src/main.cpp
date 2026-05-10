@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <chrono>
 #include <csignal>
 #include <cstdint>
 #include <exception>
@@ -59,12 +60,65 @@ void PrintCaptureStats(std::ostream& output, const CaptureStats& stats) {
            << "bytes_input: " << stats.bytes_input << '\n'
            << "bytes_output: " << stats.bytes_output << '\n'
            << "bytes_saved: " << stats.bytes_saved << '\n'
+           << "receive_errors: " << stats.receive_errors << '\n';
+
+    if (stats.kernel_stats_available) {
+        output << "kernel_packets: " << stats.kernel_packets << '\n'
+               << "kernel_drops: " << stats.kernel_drops << '\n';
+    }
+
+    output
            << "tls_appdata_constricted: " << stats.tls_appdata_constricted << '\n'
            << "tls_fallback: " << stats.tls_fallback << '\n'
            << "quic_long_header: " << stats.quic_long_header << '\n'
            << "quic_short_matched: " << stats.quic_short_matched << '\n'
            << "quic_short_constricted: " << stats.quic_short_constricted << '\n'
            << "quic_fallback: " << stats.quic_fallback << '\n';
+}
+
+void FinalizeLiveStats(CaptureStats& stats, const AfPacketCapture& capture) {
+    stats.bytes_saved = stats.bytes_input - stats.bytes_output;
+    stats.receive_errors = capture.non_fatal_receive_errors();
+
+    AfPacketKernelStats kernel_stats;
+    if (capture.TryReadKernelStats(kernel_stats)) {
+        stats.kernel_stats_available = true;
+        stats.kernel_packets = kernel_stats.packets;
+        stats.kernel_drops = kernel_stats.drops;
+    }
+}
+
+bool DurationLimitReached(const std::chrono::steady_clock::time_point start_time,
+                          const std::uint64_t duration_sec) noexcept {
+    if (duration_sec == 0U) {
+        return false;
+    }
+
+    const auto elapsed = std::chrono::steady_clock::now() - start_time;
+    return elapsed >= std::chrono::seconds(duration_sec);
+}
+
+void PrintLiveCaptureStart(const PolicyConfig& config) {
+    std::cout << "Starting live capture.\n"
+              << "interface: " << config.capture.interface << '\n'
+              << "output: " << config.capture.output.string() << '\n'
+              << "default_snaplen: " << config.capture.default_snaplen << '\n'
+              << "max_capture_len: " << config.capture.max_capture_len << '\n';
+
+    if (config.capture.max_packets != 0U) {
+        std::cout << "max_packets: " << config.capture.max_packets << '\n';
+    }
+    if (config.capture.duration_sec != 0U) {
+        std::cout << "duration_sec: " << config.capture.duration_sec << '\n';
+    }
+
+    std::cout << "Press Ctrl+C to stop.\n";
+}
+
+void PrintLiveCaptureStop(std::string_view reason, const CaptureStats& stats) {
+    std::cout << "Live capture stopped: " << reason << '\n'
+              << "Final stats:\n";
+    PrintCaptureStats(std::cout, stats);
 }
 
 void AccumulateDecisionStats(CaptureStats& stats, const DecisionReason reason) {
@@ -125,6 +179,7 @@ int RunLiveCapture(const PolicyConfig& config) {
     PcapWriter writer(output_stream, output_snaplen);
     LiveCapturePolicy policy(config);
     CaptureStats stats;
+    const auto start_time = std::chrono::steady_clock::now();
 
     try {
         writer.WriteGlobalHeader();
@@ -133,21 +188,41 @@ int RunLiveCapture(const PolicyConfig& config) {
         return 1;
     }
 
-    std::cout << "Starting live capture on interface '" << config.capture.interface
-              << "'. Press Ctrl+C to stop.\n"
-              << "Writing output to '" << config.capture.output.string() << "'.\n";
+    PrintLiveCaptureStart(config);
 
+    std::string_view stop_reason = "signal";
     while (g_stop_requested == 0) {
+        if (config.capture.max_packets != 0U &&
+            stats.packets_total >= config.capture.max_packets) {
+            stop_reason = "max_packets limit reached";
+            break;
+        }
+
+        if (DurationLimitReached(start_time, config.capture.duration_sec)) {
+            stop_reason = "duration_sec limit reached";
+            break;
+        }
+
         CapturedPacket packet;
         const AfPacketReceiveStatus status =
             capture.ReceiveNext(packet, &g_stop_requested);
 
         if (status == AfPacketReceiveStatus::Interrupted) {
+            stop_reason = g_stop_requested != 0 ? "signal received" : "interrupted";
             break;
         }
 
+        if (status == AfPacketReceiveStatus::Timeout) {
+            continue;
+        }
+
         if (status == AfPacketReceiveStatus::Error) {
+            FinalizeLiveStats(stats, capture);
             std::cerr << "Live capture error: " << capture.error_message() << '\n';
+            if (stats.packets_total != 0U || stats.receive_errors != 0U) {
+                std::cerr << "Partial stats:\n";
+                PrintCaptureStats(std::cerr, stats);
+            }
             return 1;
         }
 
@@ -165,11 +240,31 @@ int RunLiveCapture(const PolicyConfig& config) {
         stats.bytes_input += packet.captured_len();
         stats.bytes_output += decision.output_len;
         AccumulateDecisionStats(stats, decision.reason);
+
+        if (config.capture.max_packets != 0U &&
+            stats.packets_total >= config.capture.max_packets) {
+            stop_reason = "max_packets limit reached";
+            break;
+        }
     }
 
-    stats.bytes_saved = stats.bytes_input - stats.bytes_output;
-    std::cout << "Live capture stopped.\n";
-    PrintCaptureStats(std::cout, stats);
+    if (g_stop_requested != 0 && stop_reason == "signal") {
+        stop_reason = "signal received";
+    } else if (g_stop_requested == 0 &&
+               stop_reason == "signal" &&
+               DurationLimitReached(start_time, config.capture.duration_sec)) {
+        stop_reason = "duration_sec limit reached";
+    } else if (g_stop_requested == 0 &&
+               stop_reason == "signal" &&
+               config.capture.max_packets != 0U &&
+               stats.packets_total >= config.capture.max_packets) {
+        stop_reason = "max_packets limit reached";
+    } else if (stop_reason == "signal") {
+        stop_reason = "stopped";
+    }
+
+    FinalizeLiveStats(stats, capture);
+    PrintLiveCaptureStop(stop_reason, stats);
     return 0;
 }
 

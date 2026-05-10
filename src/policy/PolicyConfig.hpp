@@ -16,6 +16,8 @@ struct PolicyConfig {
         std::string interface{};
         std::uint32_t default_snaplen{65535};
         std::uint32_t max_capture_len{65535};
+        std::uint64_t max_packets{0};
+        std::uint64_t duration_sec{0};
         std::filesystem::path output{"output.pcap"};
     } capture;
 

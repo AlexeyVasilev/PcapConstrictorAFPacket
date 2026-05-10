@@ -37,6 +37,18 @@ The binary can now run a deterministic offline pipeline:
 `input.pcap -> PcapReader -> LiveCapturePolicy -> PcapWriter -> output.pcap`
 
 For live AF_PACKET capture, `CAP_NET_RAW` or root privileges are required.
+Basic live usage remains:
+
+```bash
+sudo ./PcapConstrictorAFPacket --config config.ini
+```
+
+Current live capture controls under `[capture]`:
+
+- `capture.max_packets`
+- `capture.duration_sec`
+
+Both default to `0`, which means unlimited. These are intended as bounded smoke/demo controls for the current simple `recvfrom` live path and do not affect offline mode.
 
 Current TLS configuration keys:
 
@@ -74,6 +86,8 @@ This threshold applies only to protocol-aware extra constriction. Ordinary `defa
 - Golden offline compatibility tests compare generated constrained PCAPs byte-for-byte against committed expected outputs inherited from PcapConstrictor.
 
 Golden tests do not use live AF_PACKET capture, root privileges, or `CAP_NET_RAW`.
+
+Live capture prints a final stats block on normal stop, bounded stop, or signal stop. This includes user-space counters such as packet and byte totals, plus `kernel_packets` and `kernel_drops` when Linux `PACKET_STATISTICS` is available at shutdown.
 
 ## Future milestones
 

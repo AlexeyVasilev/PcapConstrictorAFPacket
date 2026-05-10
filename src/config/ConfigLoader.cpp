@@ -81,6 +81,24 @@ bool ParseUint32(std::string_view value, std::uint32_t& output) {
     return true;
 }
 
+bool ParseUint64(std::string_view value, std::uint64_t& output) {
+    const std::string trimmed = Trim(value);
+    if (trimmed.empty()) {
+        return false;
+    }
+
+    std::uint64_t parsed_value = 0;
+    const auto* begin = trimmed.data();
+    const auto* end = trimmed.data() + trimmed.size();
+    const auto result = std::from_chars(begin, end, parsed_value);
+    if (result.ec != std::errc{} || result.ptr != end) {
+        return false;
+    }
+
+    output = parsed_value;
+    return true;
+}
+
 bool ParsePorts(std::string_view value, std::vector<std::uint16_t>& ports) {
     std::vector<std::uint16_t> parsed_ports;
     std::size_t start = 0;
@@ -144,6 +162,21 @@ bool AssignValue(PolicyConfig& config,
 
         if (normalized_key == "output") {
             config.capture.output = Trim(value);
+            return true;
+        }
+
+        if (normalized_key == "max_packets" ||
+            normalized_key == "duration_sec") {
+            std::uint64_t parsed = 0;
+            if (!ParseUint64(value, parsed)) {
+                return invalid_value("invalid unsigned integer for capture option");
+            }
+
+            if (normalized_key == "max_packets") {
+                config.capture.max_packets = parsed;
+            } else {
+                config.capture.duration_sec = parsed;
+            }
             return true;
         }
 

@@ -13,6 +13,7 @@
 #include <net/ethernet.h>
 #include <net/if.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <unistd.h>
 #endif
 
@@ -28,6 +29,7 @@ AfPacketCapture::~AfPacketCapture() {
 bool AfPacketCapture::Open(const std::string_view interface_name) {
     Close();
     error_message_.clear();
+    non_fatal_receive_errors_ = 0;
 
     if (interface_name.empty()) {
         SetError("missing interface name");
@@ -51,6 +53,21 @@ bool AfPacketCapture::Open(const std::string_view interface_name) {
     if (socket_fd < 0) {
         std::ostringstream out;
         out << "failed to create AF_PACKET socket: " << std::strerror(errno);
+        SetError(out.str());
+        return false;
+    }
+
+    timeval timeout{};
+    timeout.tv_sec = 1;
+    timeout.tv_usec = 0;
+    if (::setsockopt(socket_fd,
+                     SOL_SOCKET,
+                     SO_RCVTIMEO,
+                     &timeout,
+                     sizeof(timeout)) != 0) {
+        std::ostringstream out;
+        out << "failed to configure AF_PACKET receive timeout: " << std::strerror(errno);
+        ::close(socket_fd);
         SetError(out.str());
         return false;
     }
@@ -112,6 +129,22 @@ AfPacketReceiveStatus AfPacketCapture::ReceiveNext(
                 continue;
             }
 
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                if (stop_requested != nullptr && *stop_requested != 0) {
+                    return AfPacketReceiveStatus::Interrupted;
+                }
+                return AfPacketReceiveStatus::Timeout;
+            }
+
+            if (errno == ENOBUFS || errno == ENOMEM) {
+                ++non_fatal_receive_errors_;
+                if (stop_requested != nullptr && *stop_requested != 0) {
+                    return AfPacketReceiveStatus::Interrupted;
+                }
+                continue;
+            }
+
+            ++non_fatal_receive_errors_;
             std::ostringstream out;
             out << "failed to receive packet: " << std::strerror(errno);
             SetError(out.str());
@@ -153,6 +186,37 @@ const std::string& AfPacketCapture::error_message() const noexcept {
     return error_message_;
 }
 
+std::uint64_t AfPacketCapture::non_fatal_receive_errors() const noexcept {
+    return non_fatal_receive_errors_;
+}
+
+bool AfPacketCapture::TryReadKernelStats(AfPacketKernelStats& stats) const noexcept {
+#if defined(__linux__)
+    if (socket_fd_ < 0) {
+        return false;
+    }
+
+    tpacket_stats native_stats{};
+    socklen_t option_length = sizeof(native_stats);
+    if (::getsockopt(socket_fd_,
+                     SOL_PACKET,
+                     PACKET_STATISTICS,
+                     &native_stats,
+                     &option_length) != 0) {
+        return false;
+    }
+
+    stats = AfPacketKernelStats{
+        .packets = native_stats.tp_packets,
+        .drops = native_stats.tp_drops,
+    };
+    return true;
+#else
+    (void)stats;
+    return false;
+#endif
+}
+
 PacketDirection AfPacketCapture::MapPacketTypeToDirection(const unsigned int packet_type) noexcept {
     switch (packet_type) {
         case kAfPacketTypeOutgoing:
@@ -178,6 +242,7 @@ void AfPacketCapture::Close() noexcept {
     }
 #endif
     interface_index_ = 0;
+    non_fatal_receive_errors_ = 0;
 }
 
 void AfPacketCapture::SetError(std::string message) {

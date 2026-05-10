@@ -18,8 +18,14 @@ inline constexpr unsigned int kAfPacketTypeOutgoing = 4U;
 
 enum class AfPacketReceiveStatus {
     Packet,
+    Timeout,
     Interrupted,
     Error,
+};
+
+struct AfPacketKernelStats {
+    std::uint64_t packets{0};
+    std::uint64_t drops{0};
 };
 
 class AfPacketCapture {
@@ -34,6 +40,8 @@ public:
 
     [[nodiscard]] bool is_open() const noexcept;
     [[nodiscard]] const std::string& error_message() const noexcept;
+    [[nodiscard]] std::uint64_t non_fatal_receive_errors() const noexcept;
+    [[nodiscard]] bool TryReadKernelStats(AfPacketKernelStats& stats) const noexcept;
     [[nodiscard]] static PacketDirection MapPacketTypeToDirection(unsigned int packet_type) noexcept;
 
 private:
@@ -46,6 +54,7 @@ private:
     std::vector<std::byte> buffer_{};
     std::string error_message_{};
     std::uint32_t interface_index_{0};
+    std::uint64_t non_fatal_receive_errors_{0};
 };
 
 }  // namespace pcap_constrictor_afpacket

@@ -23,6 +23,12 @@ int RunConfigLoaderTests() {
         if (defaults.config.capture.default_snaplen != 65535U) {
             return Fail("default_snaplen default mismatch");
         }
+        if (defaults.config.capture.max_packets != 0U) {
+            return Fail("capture.max_packets default mismatch");
+        }
+        if (defaults.config.capture.duration_sec != 0U) {
+            return Fail("capture.duration_sec default mismatch");
+        }
         if (defaults.config.general.min_saved_bytes_per_packet != 16U) {
             return Fail("general.min_saved_bytes_per_packet default mismatch");
         }
@@ -53,6 +59,8 @@ int RunConfigLoaderTests() {
 interface = eth0
 default_snaplen = 256
 max_capture_len = 128
+max_packets = 123456789
+duration_sec = 90
 output = constrained-output.pcap
 
 [tls]
@@ -83,6 +91,10 @@ min_saved_bytes_per_packet = 24
         if (parsed.config.capture.default_snaplen != 256U ||
             parsed.config.capture.max_capture_len != 128U) {
             return Fail("capture settings did not parse");
+        }
+        if (parsed.config.capture.max_packets != 123456789ULL ||
+            parsed.config.capture.duration_sec != 90ULL) {
+            return Fail("capture live limits did not parse");
         }
         if (parsed.config.general.min_saved_bytes_per_packet != 24U) {
             return Fail("general.min_saved_bytes_per_packet did not parse");
