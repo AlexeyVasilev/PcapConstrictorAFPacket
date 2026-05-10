@@ -6,6 +6,8 @@ int RunLivePolicySmokeTests();
 int RunPcapReaderTests();
 int RunOfflinePacketFeedTests();
 int RunAfPacketCaptureTests();
+int RunPacketDecodeTests();
+int RunLivePolicyClassificationTests();
 
 int main() {
     int failures = 0;
@@ -16,6 +18,8 @@ int main() {
     failures += RunPcapReaderTests();
     failures += RunOfflinePacketFeedTests();
     failures += RunAfPacketCaptureTests();
+    failures += RunPacketDecodeTests();
+    failures += RunLivePolicyClassificationTests();
 
     if (failures == 0) {
         std::cout << "All tests passed.\n";

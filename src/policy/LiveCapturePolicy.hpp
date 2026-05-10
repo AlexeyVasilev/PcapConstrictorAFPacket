@@ -4,22 +4,26 @@
 #include <string_view>
 
 #include "capture/CapturedPacket.hpp"
+#include "decode/PacketDecode.hpp"
 #include "policy/PolicyConfig.hpp"
 
 namespace pcap_constrictor_afpacket {
 
 enum class DecisionReason {
-    PassThrough,
-    ClampedToDefaultSnaplen,
-    ClampedToMaxCaptureLen,
-    ClampedToBothLimits,
-    MalformedPacket,
+    Default,
+    ParseError,
+    NonIp,
+    Tcp,
+    Udp,
+    TlsCandidate,
+    QuicCandidate,
 };
 
 struct LiveCaptureDecision {
     std::uint32_t output_len{0};
     std::uint32_t original_len{0};
-    DecisionReason reason{DecisionReason::PassThrough};
+    DecisionReason reason{DecisionReason::Default};
+    PacketDecodeResult decode{};
 
     [[nodiscard]] std::string_view reason_string() const noexcept;
 };

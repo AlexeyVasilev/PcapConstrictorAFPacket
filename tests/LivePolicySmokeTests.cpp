@@ -52,8 +52,8 @@ int RunLivePolicySmokeTests() {
         if (decision.original_len != 512U) {
             return Fail("original length should be preserved");
         }
-        if (decision.reason != DecisionReason::ClampedToMaxCaptureLen) {
-            return Fail("unexpected clamp reason for max_capture_len");
+        if (decision.reason != DecisionReason::NonIp) {
+            return Fail("non-IP packet should classify as NonIp");
         }
     }
 
@@ -69,8 +69,8 @@ int RunLivePolicySmokeTests() {
         if (decision.output_len != 64U) {
             return Fail("equal limits should clamp to 64 bytes");
         }
-        if (decision.reason != DecisionReason::ClampedToBothLimits) {
-            return Fail("equal limits should report both-limits clamp");
+        if (decision.reason != DecisionReason::NonIp) {
+            return Fail("zeroed Ethernet frame should classify as NonIp");
         }
     }
 
@@ -83,14 +83,14 @@ int RunLivePolicySmokeTests() {
         const LiveCaptureDecision decision =
             policy.Evaluate(MakePacket(std::span(bytes), 100U, 90U));
 
-        if (decision.output_len != 100U) {
-            return Fail("malformed packet should still use conservative available bytes");
+        if (decision.output_len != 90U) {
+            return Fail("malformed packet should clamp conservatively to original length");
         }
-        if (decision.original_len != 100U) {
-            return Fail("malformed packet original length should be corrected conservatively");
+        if (decision.original_len != 90U) {
+            return Fail("malformed packet original length should remain conservative");
         }
-        if (decision.reason != DecisionReason::MalformedPacket) {
-            return Fail("malformed packet should be marked conservatively");
+        if (decision.reason != DecisionReason::ParseError) {
+            return Fail("malformed packet should classify as ParseError");
         }
     }
 

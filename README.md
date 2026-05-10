@@ -2,7 +2,7 @@
 
 PcapConstrictorAFPacket is a Linux-oriented live recorder that is planned to reuse PcapConstrictor-style TLS/QUIC-aware adaptive capture logic for AF_PACKET capture.
 
-Current status: offline classic PCAP feed mode is available, and basic Linux AF_PACKET live capture is available. TLS/QUIC constriction is still future work.
+Current status: offline classic PCAP feed mode is available, basic Linux AF_PACKET live capture is available, and Ethernet/IP/TCP/UDP decode scaffolding is available. TLS/QUIC constriction is still future work.
 
 ## Current scope
 
@@ -13,6 +13,7 @@ Current status: offline classic PCAP feed mode is available, and basic Linux AF_
 - Little-endian classic PCAP writer (`DLT_EN10MB`, microsecond timestamps)
 - Classic PCAP offline reader/feed path for reproducible policy validation
 - Basic Linux AF_PACKET raw-socket live capture
+- Ethernet/VLAN/IP/TCP/UDP decode scaffolding for policy classification
 - Minimal standalone tests without an external framework
 
 ## Not in this milestone
@@ -35,6 +36,8 @@ The binary can now run a deterministic offline pipeline:
 `input.pcap -> PcapReader -> LiveCapturePolicy -> PcapWriter -> output.pcap`
 
 For live AF_PACKET capture, `CAP_NET_RAW` or root privileges are required.
+
+The current live policy still only clamps captured lengths; protocol-aware work in this milestone is limited to safe parsing and candidate classification for future TLS/QUIC constriction.
 
 ## Future milestones
 
