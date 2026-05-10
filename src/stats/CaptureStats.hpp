@@ -10,6 +10,8 @@ struct CaptureStats {
     std::uint64_t bytes_input{0};
     std::uint64_t bytes_output{0};
     std::uint64_t bytes_saved{0};
+    std::uint64_t tls_appdata_constricted{0};
+    std::uint64_t tls_fallback{0};
 };
 
 }  // namespace pcap_constrictor_afpacket

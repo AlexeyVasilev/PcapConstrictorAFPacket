@@ -52,6 +52,12 @@ OfflinePacketFeedResult OfflinePacketFeed::Run(const std::filesystem::path& inpu
             ++result.stats.packets_written;
             result.stats.bytes_input += record->captured_length;
             result.stats.bytes_output += decision.output_len;
+            if (decision.reason == DecisionReason::TlsApplicationDataConstricted) {
+                ++result.stats.tls_appdata_constricted;
+            } else if (decision.reason == DecisionReason::TlsMalformedFallback ||
+                       decision.reason == DecisionReason::TlsNoRecordFallback) {
+                ++result.stats.tls_fallback;
+            }
         }
     } catch (const std::exception& exception) {
         result.error = exception.what();

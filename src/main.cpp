@@ -58,7 +58,9 @@ void PrintCaptureStats(std::ostream& output, const CaptureStats& stats) {
            << "packets_written: " << stats.packets_written << '\n'
            << "bytes_input: " << stats.bytes_input << '\n'
            << "bytes_output: " << stats.bytes_output << '\n'
-           << "bytes_saved: " << stats.bytes_saved << '\n';
+           << "bytes_saved: " << stats.bytes_saved << '\n'
+           << "tls_appdata_constricted: " << stats.tls_appdata_constricted << '\n'
+           << "tls_fallback: " << stats.tls_fallback << '\n';
 }
 
 int RunLiveCapture(const PolicyConfig& config) {
@@ -130,6 +132,12 @@ int RunLiveCapture(const PolicyConfig& config) {
         ++stats.packets_written;
         stats.bytes_input += packet.captured_len();
         stats.bytes_output += decision.output_len;
+        if (decision.reason == DecisionReason::TlsApplicationDataConstricted) {
+            ++stats.tls_appdata_constricted;
+        } else if (decision.reason == DecisionReason::TlsMalformedFallback ||
+                   decision.reason == DecisionReason::TlsNoRecordFallback) {
+            ++stats.tls_fallback;
+        }
     }
 
     stats.bytes_saved = stats.bytes_input - stats.bytes_output;

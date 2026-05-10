@@ -8,6 +8,7 @@ int RunOfflinePacketFeedTests();
 int RunAfPacketCaptureTests();
 int RunPacketDecodeTests();
 int RunLivePolicyClassificationTests();
+int RunTlsConstrictorTests();
 
 int main() {
     int failures = 0;
@@ -20,6 +21,7 @@ int main() {
     failures += RunAfPacketCaptureTests();
     failures += RunPacketDecodeTests();
     failures += RunLivePolicyClassificationTests();
+    failures += RunTlsConstrictorTests();
 
     if (failures == 0) {
         std::cout << "All tests passed.\n";

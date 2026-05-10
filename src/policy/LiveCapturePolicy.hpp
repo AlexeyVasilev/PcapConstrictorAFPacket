@@ -16,6 +16,9 @@ enum class DecisionReason {
     Tcp,
     Udp,
     TlsCandidate,
+    TlsApplicationDataConstricted,
+    TlsMalformedFallback,
+    TlsNoRecordFallback,
     QuicCandidate,
 };
 

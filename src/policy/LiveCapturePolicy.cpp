@@ -5,6 +5,8 @@
 #include <utility>
 #include <vector>
 
+#include "policy/TlsConstrictor.hpp"
+
 namespace pcap_constrictor_afpacket {
 
 namespace {
@@ -29,6 +31,12 @@ std::string_view LiveCaptureDecision::reason_string() const noexcept {
             return "udp";
         case DecisionReason::TlsCandidate:
             return "tls_candidate";
+        case DecisionReason::TlsApplicationDataConstricted:
+            return "tls_application_data_constricted";
+        case DecisionReason::TlsMalformedFallback:
+            return "tls_malformed_fallback";
+        case DecisionReason::TlsNoRecordFallback:
+            return "tls_no_record_fallback";
         case DecisionReason::QuicCandidate:
             return "quic_candidate";
     }
@@ -80,9 +88,32 @@ LiveCaptureDecision LiveCapturePolicy::Evaluate(const CapturedPacket& packet) co
         }
     }
 
+    std::uint32_t final_output_len = output_len;
+    if (!malformed &&
+        decoded.failure_reason == PacketDecodeFailureReason::None &&
+        reason == DecisionReason::TlsCandidate &&
+        decoded.transport_payload_length > 0U) {
+        const TlsConstrictResult tls_result = TlsConstrictor::Evaluate(
+            std::span<const std::byte>(packet.data().data(), safe_captured_len),
+            decoded.transport_payload_offset,
+            decoded.transport_payload_length,
+            config_.tls);
+
+        if (tls_result.disposition == TlsConstrictDisposition::AppDataPrefix) {
+            final_output_len = std::min(output_len, tls_result.output_len);
+            if (final_output_len < output_len) {
+                reason = DecisionReason::TlsApplicationDataConstricted;
+            }
+        } else if (tls_result.disposition == TlsConstrictDisposition::Malformed) {
+            reason = DecisionReason::TlsMalformedFallback;
+        } else if (tls_result.disposition == TlsConstrictDisposition::NoRecord) {
+            reason = DecisionReason::TlsNoRecordFallback;
+        }
+    }
+
     // TODO: Add PcapConstrictor-compatible TLS/QUIC adapters here after live input exists.
     return LiveCaptureDecision{
-        .output_len = output_len,
+        .output_len = final_output_len,
         .original_len = conservative_original_len,
         .reason = reason,
         .decode = decoded,
