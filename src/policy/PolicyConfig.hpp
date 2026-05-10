@@ -9,6 +9,7 @@ namespace pcap_constrictor_afpacket {
 
 struct PolicyConfig {
     struct CaptureOptions {
+        std::string interface{};
         std::uint32_t default_snaplen{65535};
         std::uint32_t max_capture_len{65535};
         std::filesystem::path output{"output.pcap"};

@@ -9,6 +9,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 include(CTest)
 
 add_library(PcapConstrictorAFPacketCore STATIC
+    src/capture/AfPacketCapture.cpp
     src/config/ConfigLoader.cpp
     src/offline/OfflinePacketFeed.cpp
     src/offline/PcapReader.cpp
@@ -33,6 +34,7 @@ target_link_libraries(PcapConstrictorAFPacket
 )
 
 add_executable(PcapConstrictorAFPacketTests
+    tests/AfPacketCaptureTests.cpp
     tests/TestMain.cpp
     tests/ConfigLoaderTests.cpp
     tests/LivePolicySmokeTests.cpp

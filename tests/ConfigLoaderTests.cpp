@@ -26,6 +26,9 @@ int RunConfigLoaderTests() {
         if (defaults.config.capture.max_capture_len != 65535U) {
             return Fail("max_capture_len default mismatch");
         }
+        if (!defaults.config.capture.interface.empty()) {
+            return Fail("capture.interface default mismatch");
+        }
         if (defaults.config.capture.output != "output.pcap") {
             return Fail("capture.output default mismatch");
         }
@@ -44,6 +47,7 @@ int RunConfigLoaderTests() {
         constexpr std::string_view config_text = R"ini(
 ; comment
 [capture]
+interface = eth0
 default_snaplen = 256
 max_capture_len = 128
 output = constrained-output.pcap
@@ -73,6 +77,9 @@ enabled = false
         if (parsed.config.capture.default_snaplen != 256U ||
             parsed.config.capture.max_capture_len != 128U) {
             return Fail("capture settings did not parse");
+        }
+        if (parsed.config.capture.interface != "eth0") {
+            return Fail("capture.interface did not parse");
         }
         if (parsed.config.capture.output != "constrained-output.pcap") {
             return Fail("capture.output did not parse");

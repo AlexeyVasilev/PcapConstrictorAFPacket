@@ -137,6 +137,11 @@ bool AssignValue(PolicyConfig& config,
     };
 
     if (normalized_section == "capture") {
+        if (normalized_key == "interface") {
+            config.capture.interface = Trim(value);
+            return true;
+        }
+
         if (normalized_key == "output") {
             config.capture.output = Trim(value);
             return true;
