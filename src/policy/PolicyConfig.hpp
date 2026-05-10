@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdint>
+#include <filesystem>
+#include <string>
 #include <vector>
 
 namespace pcap_constrictor_afpacket {
@@ -9,6 +11,7 @@ struct PolicyConfig {
     struct CaptureOptions {
         std::uint32_t default_snaplen{65535};
         std::uint32_t max_capture_len{65535};
+        std::filesystem::path output{"output.pcap"};
     } capture;
 
     struct TlsOptions {

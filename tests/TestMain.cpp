@@ -3,6 +3,8 @@
 int RunPcapWriterTests();
 int RunConfigLoaderTests();
 int RunLivePolicySmokeTests();
+int RunPcapReaderTests();
+int RunOfflinePacketFeedTests();
 
 int main() {
     int failures = 0;
@@ -10,6 +12,8 @@ int main() {
     failures += RunPcapWriterTests();
     failures += RunConfigLoaderTests();
     failures += RunLivePolicySmokeTests();
+    failures += RunPcapReaderTests();
+    failures += RunOfflinePacketFeedTests();
 
     if (failures == 0) {
         std::cout << "All tests passed.\n";

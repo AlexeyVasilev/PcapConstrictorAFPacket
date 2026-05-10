@@ -2,7 +2,7 @@
 
 PcapConstrictorAFPacket is a Linux-oriented live recorder that is planned to reuse PcapConstrictor-style TLS/QUIC-aware adaptive capture logic for AF_PACKET capture.
 
-Current status: skeleton only. This milestone establishes the basic project structure, configuration loading, packet metadata types, simple length-based policy plumbing, classic PCAP writing, and offline smoke-path tests. AF_PACKET capture is not implemented yet.
+Current status: skeleton plus offline classic PCAP feed mode. This milestone establishes the basic project structure, configuration loading, packet metadata types, simple length-based policy plumbing, classic PCAP writing, and a deterministic offline packet-feed path for validating policy behavior before live capture. AF_PACKET capture is not implemented yet.
 
 ## Current scope
 
@@ -11,6 +11,7 @@ Current status: skeleton only. This milestone establishes the basic project stru
 - Packet metadata/view types for future live capture integration
 - Simple policy that only applies `default_snaplen` and `max_capture_len`
 - Little-endian classic PCAP writer (`DLT_EN10MB`, microsecond timestamps)
+- Classic PCAP offline reader/feed path for reproducible policy validation
 - Minimal standalone tests without an external framework
 
 ## Not in this milestone
@@ -26,15 +27,19 @@ Current status: skeleton only. This milestone establishes the basic project stru
 ```bash
 ./PcapConstrictorAFPacket --help
 ./PcapConstrictorAFPacket --config config.example.ini
+./PcapConstrictorAFPacket --config config.example.ini --offline-input input.pcap
 ```
 
-The binary currently only validates configuration and reports that live AF_PACKET capture is not implemented yet.
+The binary can now run a deterministic offline pipeline:
+
+`input.pcap -> PcapReader -> LiveCapturePolicy -> PcapWriter -> output.pcap`
+
+AF_PACKET live capture is still the next milestone.
 
 ## Future milestones
 
-1. Offline packet feeder
-2. Basic AF_PACKET `recvmsg` capture
-3. Live policy integration
-4. TLS constriction
-5. QUIC constriction
-6. `PACKET_MMAP` / `TPACKET_V3`
+1. Basic AF_PACKET `recvmsg` capture
+2. Live policy integration
+3. TLS constriction
+4. QUIC constriction
+5. `PACKET_MMAP` / `TPACKET_V3`

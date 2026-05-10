@@ -26,6 +26,9 @@ int RunConfigLoaderTests() {
         if (defaults.config.capture.max_capture_len != 65535U) {
             return Fail("max_capture_len default mismatch");
         }
+        if (defaults.config.capture.output != "output.pcap") {
+            return Fail("capture.output default mismatch");
+        }
         if (!defaults.config.tls.enabled || defaults.config.tls.ports.size() != 2U) {
             return Fail("TLS defaults mismatch");
         }
@@ -43,6 +46,7 @@ int RunConfigLoaderTests() {
 [capture]
 default_snaplen = 256
 max_capture_len = 128
+output = constrained-output.pcap
 
 [tls]
 enabled = false
@@ -69,6 +73,9 @@ enabled = false
         if (parsed.config.capture.default_snaplen != 256U ||
             parsed.config.capture.max_capture_len != 128U) {
             return Fail("capture settings did not parse");
+        }
+        if (parsed.config.capture.output != "constrained-output.pcap") {
+            return Fail("capture.output did not parse");
         }
         if (parsed.config.tls.enabled) {
             return Fail("tls.enabled did not parse");

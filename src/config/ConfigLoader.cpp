@@ -137,6 +137,11 @@ bool AssignValue(PolicyConfig& config,
     };
 
     if (normalized_section == "capture") {
+        if (normalized_key == "output") {
+            config.capture.output = Trim(value);
+            return true;
+        }
+
         std::uint32_t parsed = 0;
         if (!ParseUint32(value, parsed)) {
             return invalid_value("invalid unsigned integer for capture option");
@@ -333,6 +338,16 @@ ConfigLoadResult ConfigLoader::LoadFromString(std::string_view text,
                          result.error)) {
             return result;
         }
+    }
+
+    if (result.config.capture.default_snaplen == 0U) {
+        result.error = FormatError(source_name, 0U, "capture.default_snaplen must be greater than 0");
+        return result;
+    }
+
+    if (result.config.capture.max_capture_len == 0U) {
+        result.error = FormatError(source_name, 0U, "capture.max_capture_len must be greater than 0");
+        return result;
     }
 
     return result;

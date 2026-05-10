@@ -10,6 +10,8 @@ include(CTest)
 
 add_library(PcapConstrictorAFPacketCore STATIC
     src/config/ConfigLoader.cpp
+    src/offline/OfflinePacketFeed.cpp
+    src/offline/PcapReader.cpp
     src/policy/LiveCapturePolicy.cpp
     src/writer/PcapWriter.cpp
 )
@@ -34,6 +36,8 @@ add_executable(PcapConstrictorAFPacketTests
     tests/TestMain.cpp
     tests/ConfigLoaderTests.cpp
     tests/LivePolicySmokeTests.cpp
+    tests/OfflinePacketFeedTests.cpp
+    tests/PcapReaderTests.cpp
     tests/PcapWriterTests.cpp
 )
 
