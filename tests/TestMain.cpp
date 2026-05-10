@@ -8,6 +8,8 @@ int RunOfflinePacketFeedTests();
 int RunAfPacketCaptureTests();
 int RunPacketDecodeTests();
 int RunLivePolicyClassificationTests();
+int RunLivePolicyQuicTests();
+int RunQuicConstrictorTests();
 int RunTlsConstrictorTests();
 
 int main() {
@@ -21,6 +23,8 @@ int main() {
     failures += RunAfPacketCaptureTests();
     failures += RunPacketDecodeTests();
     failures += RunLivePolicyClassificationTests();
+    failures += RunLivePolicyQuicTests();
+    failures += RunQuicConstrictorTests();
     failures += RunTlsConstrictorTests();
 
     if (failures == 0) {

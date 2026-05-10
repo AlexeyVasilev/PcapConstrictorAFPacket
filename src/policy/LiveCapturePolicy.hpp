@@ -6,6 +6,7 @@
 #include "capture/CapturedPacket.hpp"
 #include "decode/PacketDecode.hpp"
 #include "policy/PolicyConfig.hpp"
+#include "policy/QuicConstrictor.hpp"
 
 namespace pcap_constrictor_afpacket {
 
@@ -20,6 +21,12 @@ enum class DecisionReason {
     TlsMalformedFallback,
     TlsNoRecordFallback,
     QuicCandidate,
+    QuicLongHeader,
+    QuicShortHeaderMatched,
+    QuicShortHeaderConstricted,
+    QuicShortHeaderUnknownCidFallback,
+    QuicShortHeaderDcidMismatchFallback,
+    QuicMalformedFallback,
 };
 
 struct LiveCaptureDecision {
@@ -35,11 +42,12 @@ class LiveCapturePolicy {
 public:
     explicit LiveCapturePolicy(PolicyConfig config) noexcept;
 
-    [[nodiscard]] LiveCaptureDecision Evaluate(const CapturedPacket& packet) const noexcept;
+    [[nodiscard]] LiveCaptureDecision Evaluate(const CapturedPacket& packet) noexcept;
     [[nodiscard]] const PolicyConfig& config() const noexcept;
 
 private:
     PolicyConfig config_;
+    QuicConstrictor quic_constrictor_{};
 };
 
 }  // namespace pcap_constrictor_afpacket

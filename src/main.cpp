@@ -60,7 +60,39 @@ void PrintCaptureStats(std::ostream& output, const CaptureStats& stats) {
            << "bytes_output: " << stats.bytes_output << '\n'
            << "bytes_saved: " << stats.bytes_saved << '\n'
            << "tls_appdata_constricted: " << stats.tls_appdata_constricted << '\n'
-           << "tls_fallback: " << stats.tls_fallback << '\n';
+           << "tls_fallback: " << stats.tls_fallback << '\n'
+           << "quic_long_header: " << stats.quic_long_header << '\n'
+           << "quic_short_matched: " << stats.quic_short_matched << '\n'
+           << "quic_short_constricted: " << stats.quic_short_constricted << '\n'
+           << "quic_fallback: " << stats.quic_fallback << '\n';
+}
+
+void AccumulateDecisionStats(CaptureStats& stats, const DecisionReason reason) {
+    switch (reason) {
+        case DecisionReason::TlsApplicationDataConstricted:
+            ++stats.tls_appdata_constricted;
+            break;
+        case DecisionReason::TlsMalformedFallback:
+        case DecisionReason::TlsNoRecordFallback:
+            ++stats.tls_fallback;
+            break;
+        case DecisionReason::QuicLongHeader:
+            ++stats.quic_long_header;
+            break;
+        case DecisionReason::QuicShortHeaderMatched:
+            ++stats.quic_short_matched;
+            break;
+        case DecisionReason::QuicShortHeaderConstricted:
+            ++stats.quic_short_constricted;
+            break;
+        case DecisionReason::QuicShortHeaderUnknownCidFallback:
+        case DecisionReason::QuicShortHeaderDcidMismatchFallback:
+        case DecisionReason::QuicMalformedFallback:
+            ++stats.quic_fallback;
+            break;
+        default:
+            break;
+    }
 }
 
 int RunLiveCapture(const PolicyConfig& config) {
@@ -132,12 +164,7 @@ int RunLiveCapture(const PolicyConfig& config) {
         ++stats.packets_written;
         stats.bytes_input += packet.captured_len();
         stats.bytes_output += decision.output_len;
-        if (decision.reason == DecisionReason::TlsApplicationDataConstricted) {
-            ++stats.tls_appdata_constricted;
-        } else if (decision.reason == DecisionReason::TlsMalformedFallback ||
-                   decision.reason == DecisionReason::TlsNoRecordFallback) {
-            ++stats.tls_fallback;
-        }
+        AccumulateDecisionStats(stats, decision.reason);
     }
 
     stats.bytes_saved = stats.bytes_input - stats.bytes_output;

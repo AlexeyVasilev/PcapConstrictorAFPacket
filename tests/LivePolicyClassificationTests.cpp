@@ -49,17 +49,21 @@ int RunLivePolicyClassificationTests() {
         std::byte{0x00}, std::byte{0x00}, std::byte{0x00}, std::byte{0x00},
     };
 
-    constexpr std::array<std::byte, 46> udp443{
+    constexpr std::array<std::byte, 57> udp443{
         std::byte{0x00}, std::byte{0x11}, std::byte{0x22}, std::byte{0x33}, std::byte{0x44}, std::byte{0x55},
         std::byte{0x66}, std::byte{0x77}, std::byte{0x88}, std::byte{0x99}, std::byte{0xaa}, std::byte{0xbb},
         std::byte{0x08}, std::byte{0x00},
-        std::byte{0x45}, std::byte{0x00}, std::byte{0x00}, std::byte{0x20}, std::byte{0x00}, std::byte{0x01},
+        std::byte{0x45}, std::byte{0x00}, std::byte{0x00}, std::byte{0x2b}, std::byte{0x00}, std::byte{0x01},
         std::byte{0x00}, std::byte{0x00}, std::byte{0x40}, std::byte{0x11}, std::byte{0x00}, std::byte{0x00},
         std::byte{0x0a}, std::byte{0x00}, std::byte{0x00}, std::byte{0x01},
         std::byte{0x0a}, std::byte{0x00}, std::byte{0x00}, std::byte{0x02},
         std::byte{0x15}, std::byte{0xb3}, std::byte{0x01}, std::byte{0xbb},
-        std::byte{0x00}, std::byte{0x0c}, std::byte{0x00}, std::byte{0x00},
-        std::byte{0xde}, std::byte{0xad}, std::byte{0xbe}, std::byte{0xef},
+        std::byte{0x00}, std::byte{0x17}, std::byte{0x00}, std::byte{0x00},
+        std::byte{0xc0}, std::byte{0x00}, std::byte{0x00}, std::byte{0x00}, std::byte{0x01},
+        std::byte{0x04},
+        std::byte{0x11}, std::byte{0x12}, std::byte{0x13}, std::byte{0x14},
+        std::byte{0x04},
+        std::byte{0x21}, std::byte{0x22}, std::byte{0x23}, std::byte{0x24},
     };
 
     constexpr std::array<std::byte, 65> tlsAppData443{
@@ -131,8 +135,8 @@ int RunLivePolicyClassificationTests() {
         const LiveCaptureDecision decision =
             policy.Evaluate(MakePacket(std::span(udp443), static_cast<std::uint32_t>(udp443.size()), 128U));
 
-        if (decision.reason != DecisionReason::QuicCandidate) {
-            return Fail("UDP 443 should classify as QuicCandidate when QUIC is enabled");
+        if (decision.reason != DecisionReason::QuicLongHeader) {
+            return Fail("Valid QUIC long-header UDP 443 should classify as QuicLongHeader");
         }
     }
 
@@ -199,7 +203,7 @@ int RunLivePolicyClassificationTests() {
             policy.Evaluate(MakePacket(std::span(udp443), static_cast<std::uint32_t>(udp443.size()), 128U));
 
         if (decision.reason != DecisionReason::Udp) {
-            return Fail("UDP 443 should fall back to Udp when QUIC is disabled");
+            return Fail("QUIC long-header packet should fall back to Udp when QUIC is disabled");
         }
     }
 

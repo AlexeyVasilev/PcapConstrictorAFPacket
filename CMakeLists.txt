@@ -15,6 +15,7 @@ add_library(PcapConstrictorAFPacketCore STATIC
     src/offline/OfflinePacketFeed.cpp
     src/offline/PcapReader.cpp
     src/policy/LiveCapturePolicy.cpp
+    src/policy/QuicConstrictor.cpp
     src/policy/TlsConstrictor.cpp
     src/writer/PcapWriter.cpp
 )
@@ -40,11 +41,13 @@ add_executable(PcapConstrictorAFPacketTests
     tests/TestMain.cpp
     tests/ConfigLoaderTests.cpp
     tests/LivePolicyClassificationTests.cpp
+    tests/LivePolicyQuicTests.cpp
     tests/LivePolicySmokeTests.cpp
     tests/OfflinePacketFeedTests.cpp
     tests/PacketDecodeTests.cpp
     tests/PcapReaderTests.cpp
     tests/PcapWriterTests.cpp
+    tests/QuicConstrictorTests.cpp
     tests/TlsConstrictorTests.cpp
 )
 

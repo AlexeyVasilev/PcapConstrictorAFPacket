@@ -2,7 +2,7 @@
 
 PcapConstrictorAFPacket is a Linux-oriented live recorder that is planned to reuse PcapConstrictor-style TLS/QUIC-aware adaptive capture logic for AF_PACKET capture.
 
-Current status: offline classic PCAP feed mode is available, basic Linux AF_PACKET live capture is available, Ethernet/IP/TCP/UDP decode scaffolding is available, and TLS Application Data constriction is available. QUIC constriction is still future work.
+Current status: offline classic PCAP feed mode is available, basic Linux AF_PACKET live capture is available, Ethernet/IP/TCP/UDP decode scaffolding is available, TLS Application Data constriction is available, and QUIC Long Header CID learning plus matched Short Header constriction is available.
 
 ## Current scope
 
@@ -10,6 +10,7 @@ Current status: offline classic PCAP feed mode is available, basic Linux AF_PACK
 - INI-like config loader with defaults and validation
 - Packet metadata/view types for future live capture integration
 - Length clamping plus TLS Application Data prefix constriction for matching TCP packets
+- Flow-aware QUIC Long Header CID learning and matched Short Header prefix constriction for matching UDP packets
 - Little-endian classic PCAP writer (`DLT_EN10MB`, microsecond timestamps)
 - Classic PCAP offline reader/feed path for reproducible policy validation
 - Basic Linux AF_PACKET raw-socket live capture
@@ -18,7 +19,7 @@ Current status: offline classic PCAP feed mode is available, basic Linux AF_PACK
 
 ## Not in this milestone
 
-- QUIC parsing
+- QUIC decryption, deep frame parsing, and connection migration
 - `PACKET_MMAP` / `TPACKET_V3`
 - libpcap, DPDK, pcapng, GUI, or multi-interface capture
 
@@ -47,7 +48,19 @@ Current continuation handling is limited. This milestone constricts TLS Applicat
 
 Malformed or ambiguous TLS falls back conservatively to the existing default `snaplen` / `max_capture_len` behavior.
 
+Current QUIC configuration keys:
+
+- `quic.enabled`
+- `quic.ports`
+- `quic.short_header_keep_packet_bytes`
+- `quic.require_dcid_match`
+- `quic.allow_short_header_without_known_dcid`
+
+Current QUIC handling is intentionally shallow. This milestone learns source CIDs from QUIC Long Header packets and constricts only matched Short Header packets using the learned destination CID for the opposite direction.
+
+Unknown, malformed, unmapped, or mismatched QUIC short headers fall back conservatively to the existing default `snaplen` / `max_capture_len` behavior.
+
 ## Future milestones
 
-1. QUIC constriction
+1. Deeper TLS/QUIC policy coverage without changing capture plumbing
 2. `PACKET_MMAP` / `TPACKET_V3`

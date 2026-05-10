@@ -5,6 +5,7 @@
 #include <utility>
 #include <vector>
 
+#include "policy/QuicConstrictor.hpp"
 #include "policy/TlsConstrictor.hpp"
 
 namespace pcap_constrictor_afpacket {
@@ -39,6 +40,18 @@ std::string_view LiveCaptureDecision::reason_string() const noexcept {
             return "tls_no_record_fallback";
         case DecisionReason::QuicCandidate:
             return "quic_candidate";
+        case DecisionReason::QuicLongHeader:
+            return "quic_long_header";
+        case DecisionReason::QuicShortHeaderMatched:
+            return "quic_short_header_matched";
+        case DecisionReason::QuicShortHeaderConstricted:
+            return "quic_short_header_constricted";
+        case DecisionReason::QuicShortHeaderUnknownCidFallback:
+            return "quic_short_header_unknown_cid_fallback";
+        case DecisionReason::QuicShortHeaderDcidMismatchFallback:
+            return "quic_short_header_dcid_mismatch_fallback";
+        case DecisionReason::QuicMalformedFallback:
+            return "quic_malformed_fallback";
     }
 
     return "unknown";
@@ -47,7 +60,7 @@ std::string_view LiveCaptureDecision::reason_string() const noexcept {
 LiveCapturePolicy::LiveCapturePolicy(PolicyConfig config) noexcept
     : config_(std::move(config)) {}
 
-LiveCaptureDecision LiveCapturePolicy::Evaluate(const CapturedPacket& packet) const noexcept {
+LiveCaptureDecision LiveCapturePolicy::Evaluate(const CapturedPacket& packet) noexcept {
     const std::uint32_t safe_captured_len = packet.packet.safe_captured_len();
     const std::uint32_t effective_input_len =
         std::min(safe_captured_len, packet.original_len());
@@ -109,9 +122,32 @@ LiveCaptureDecision LiveCapturePolicy::Evaluate(const CapturedPacket& packet) co
         } else if (tls_result.disposition == TlsConstrictDisposition::NoRecord) {
             reason = DecisionReason::TlsNoRecordFallback;
         }
+    } else if (!malformed &&
+               decoded.failure_reason == PacketDecodeFailureReason::None &&
+               reason == DecisionReason::QuicCandidate &&
+               decoded.transport_payload_length > 0U) {
+        const QuicConstrictResult quic_result = quic_constrictor_.Evaluate(
+            std::span<const std::byte>(packet.data().data(), safe_captured_len),
+            decoded,
+            config_.quic);
+
+        if (quic_result.disposition == QuicConstrictDisposition::LongHeader) {
+            reason = DecisionReason::QuicLongHeader;
+        } else if (quic_result.disposition == QuicConstrictDisposition::ShortHeaderMatched) {
+            final_output_len = std::min(output_len, quic_result.output_len);
+            reason = final_output_len < output_len
+                         ? DecisionReason::QuicShortHeaderConstricted
+                         : DecisionReason::QuicShortHeaderMatched;
+        } else if (quic_result.disposition == QuicConstrictDisposition::UnknownCidFallback) {
+            reason = DecisionReason::QuicShortHeaderUnknownCidFallback;
+        } else if (quic_result.disposition == QuicConstrictDisposition::DcidMismatchFallback) {
+            reason = DecisionReason::QuicShortHeaderDcidMismatchFallback;
+        } else if (quic_result.disposition == QuicConstrictDisposition::MalformedFallback) {
+            reason = DecisionReason::QuicMalformedFallback;
+        }
     }
 
-    // TODO: Add PcapConstrictor-compatible TLS/QUIC adapters here after live input exists.
+    // TODO: Add deeper PcapConstrictor-compatible TLS/QUIC adapters here without changing capture plumbing.
     return LiveCaptureDecision{
         .output_len = final_output_len,
         .original_len = conservative_original_len,

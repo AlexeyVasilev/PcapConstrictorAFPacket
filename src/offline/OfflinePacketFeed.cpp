@@ -12,6 +12,38 @@
 
 namespace pcap_constrictor_afpacket {
 
+namespace {
+
+void AccumulateDecisionStats(CaptureStats& stats, const DecisionReason reason) {
+    switch (reason) {
+        case DecisionReason::TlsApplicationDataConstricted:
+            ++stats.tls_appdata_constricted;
+            break;
+        case DecisionReason::TlsMalformedFallback:
+        case DecisionReason::TlsNoRecordFallback:
+            ++stats.tls_fallback;
+            break;
+        case DecisionReason::QuicLongHeader:
+            ++stats.quic_long_header;
+            break;
+        case DecisionReason::QuicShortHeaderMatched:
+            ++stats.quic_short_matched;
+            break;
+        case DecisionReason::QuicShortHeaderConstricted:
+            ++stats.quic_short_constricted;
+            break;
+        case DecisionReason::QuicShortHeaderUnknownCidFallback:
+        case DecisionReason::QuicShortHeaderDcidMismatchFallback:
+        case DecisionReason::QuicMalformedFallback:
+            ++stats.quic_fallback;
+            break;
+        default:
+            break;
+    }
+}
+
+}  // namespace
+
 OfflinePacketFeedResult OfflinePacketFeed::Run(const std::filesystem::path& input_path,
                                                const std::filesystem::path& output_path,
                                                const PolicyConfig& config) {
@@ -52,12 +84,7 @@ OfflinePacketFeedResult OfflinePacketFeed::Run(const std::filesystem::path& inpu
             ++result.stats.packets_written;
             result.stats.bytes_input += record->captured_length;
             result.stats.bytes_output += decision.output_len;
-            if (decision.reason == DecisionReason::TlsApplicationDataConstricted) {
-                ++result.stats.tls_appdata_constricted;
-            } else if (decision.reason == DecisionReason::TlsMalformedFallback ||
-                       decision.reason == DecisionReason::TlsNoRecordFallback) {
-                ++result.stats.tls_fallback;
-            }
+            AccumulateDecisionStats(result.stats, decision.reason);
         }
     } catch (const std::exception& exception) {
         result.error = exception.what();
