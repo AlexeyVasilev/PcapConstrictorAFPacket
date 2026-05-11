@@ -7,12 +7,18 @@
 
 namespace pcap_constrictor_afpacket {
 
+enum class CaptureBackend {
+    Recvmsg,
+    TpacketV3,
+};
+
 struct PolicyConfig {
     struct GeneralOptions {
         std::uint32_t min_saved_bytes_per_packet{16};
     } general;
 
     struct CaptureOptions {
+        CaptureBackend backend{CaptureBackend::Recvmsg};
         std::string interface{};
         std::uint32_t default_snaplen{65535};
         std::uint32_t max_capture_len{65535};

@@ -155,6 +155,20 @@ bool AssignValue(PolicyConfig& config,
     };
 
     if (normalized_section == "capture") {
+        if (normalized_key == "backend") {
+            const std::string backend = ToLower(Trim(value));
+            if (backend == "recvmsg") {
+                config.capture.backend = CaptureBackend::Recvmsg;
+                return true;
+            }
+            if (backend == "tpacket_v3") {
+                config.capture.backend = CaptureBackend::TpacketV3;
+                return true;
+            }
+
+            return invalid_value("unknown capture.backend value");
+        }
+
         if (normalized_key == "interface") {
             config.capture.interface = Trim(value);
             return true;

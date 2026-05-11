@@ -23,6 +23,9 @@ int RunConfigLoaderTests() {
         if (defaults.config.capture.default_snaplen != 65535U) {
             return Fail("default_snaplen default mismatch");
         }
+        if (defaults.config.capture.backend != CaptureBackend::Recvmsg) {
+            return Fail("capture.backend default mismatch");
+        }
         if (defaults.config.capture.max_packets != 0U) {
             return Fail("capture.max_packets default mismatch");
         }
@@ -56,6 +59,7 @@ int RunConfigLoaderTests() {
         constexpr std::string_view config_text = R"ini(
 ; comment
 [capture]
+backend = recvmsg
 interface = eth0
 default_snaplen = 256
 max_capture_len = 128
@@ -92,6 +96,9 @@ min_saved_bytes_per_packet = 24
             parsed.config.capture.max_capture_len != 128U) {
             return Fail("capture settings did not parse");
         }
+        if (parsed.config.capture.backend != CaptureBackend::Recvmsg) {
+            return Fail("capture.backend recvmsg did not parse");
+        }
         if (parsed.config.capture.max_packets != 123456789ULL ||
             parsed.config.capture.duration_sec != 90ULL) {
             return Fail("capture live limits did not parse");
@@ -123,6 +130,28 @@ min_saved_bytes_per_packet = 24
         }
         if (parsed.config.stats.enabled) {
             return Fail("stats.enabled did not parse");
+        }
+    }
+
+    {
+        const ConfigLoadResult parsed =
+            ConfigLoader::LoadFromString("[capture]\nbackend = tpacket_v3\n", "future.ini");
+        if (!parsed) {
+            return Fail("recognized future backend should parse");
+        }
+        if (parsed.config.capture.backend != CaptureBackend::TpacketV3) {
+            return Fail("capture.backend tpacket_v3 did not parse");
+        }
+    }
+
+    {
+        const ConfigLoadResult invalid =
+            ConfigLoader::LoadFromString("[capture]\nbackend = mystery\n", "invalid-backend.ini");
+        if (invalid) {
+            return Fail("unknown backend should fail");
+        }
+        if (invalid.error.find("unknown capture.backend value") == std::string::npos) {
+            return Fail("unknown backend should report a useful error");
         }
     }
 

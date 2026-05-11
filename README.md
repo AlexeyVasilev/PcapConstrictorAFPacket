@@ -45,10 +45,16 @@ sudo ./PcapConstrictorAFPacket --config config.ini
 
 Current live capture controls under `[capture]`:
 
+- `capture.backend`
 - `capture.max_packets`
 - `capture.duration_sec`
 
-Both default to `0`, which means unlimited. These are intended as bounded smoke/demo controls for the current simple `recvfrom` live path and do not affect offline mode.
+`capture.backend` currently supports:
+
+- `recvmsg`
+- `tpacket_v3` is recognized for future use but is not implemented yet
+
+`recvmsg` is the current simple AF_PACKET backend. `capture.max_packets` and `capture.duration_sec` both default to `0`, which means unlimited. These bounded smoke/demo controls do not affect offline mode.
 
 Current TLS configuration keys:
 

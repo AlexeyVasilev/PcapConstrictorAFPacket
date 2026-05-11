@@ -35,6 +35,17 @@ void PrintUsage(std::ostream& output) {
            << "  PcapConstrictorAFPacket --help\n";
 }
 
+std::string_view CaptureBackendName(const CaptureBackend backend) noexcept {
+    switch (backend) {
+        case CaptureBackend::Recvmsg:
+            return "recvmsg";
+        case CaptureBackend::TpacketV3:
+            return "tpacket_v3";
+    }
+
+    return "unknown";
+}
+
 void InstallSignalHandlers() {
 #if defined(__linux__)
     struct sigaction action {};
@@ -100,6 +111,7 @@ bool DurationLimitReached(const std::chrono::steady_clock::time_point start_time
 
 void PrintLiveCaptureStart(const PolicyConfig& config) {
     std::cout << "Starting live capture.\n"
+              << "backend: " << CaptureBackendName(config.capture.backend) << '\n'
               << "interface: " << config.capture.interface << '\n'
               << "output: " << config.capture.output.string() << '\n'
               << "default_snaplen: " << config.capture.default_snaplen << '\n'
@@ -152,6 +164,11 @@ void AccumulateDecisionStats(CaptureStats& stats, const DecisionReason reason) {
 int RunLiveCapture(const PolicyConfig& config) {
     if (config.capture.interface.empty()) {
         std::cerr << "Configuration error: capture.interface is required for live capture.\n";
+        return 1;
+    }
+
+    if (config.capture.backend == CaptureBackend::TpacketV3) {
+        std::cerr << "Live capture error: capture backend 'tpacket_v3' is not implemented yet\n";
         return 1;
     }
 
