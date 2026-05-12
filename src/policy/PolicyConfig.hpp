@@ -24,6 +24,10 @@ struct PolicyConfig {
         std::uint32_t max_capture_len{65535};
         std::uint64_t max_packets{0};
         std::uint64_t duration_sec{0};
+        std::uint32_t ring_block_size{1048576};
+        std::uint32_t ring_block_count{64};
+        std::uint32_t ring_frame_size{2048};
+        std::uint32_t block_timeout_ms{64};
         std::filesystem::path output{"output.pcap"};
     } capture;
 

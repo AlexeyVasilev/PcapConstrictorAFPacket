@@ -32,6 +32,12 @@ int RunConfigLoaderTests() {
         if (defaults.config.capture.duration_sec != 0U) {
             return Fail("capture.duration_sec default mismatch");
         }
+        if (defaults.config.capture.ring_block_size != 1048576U ||
+            defaults.config.capture.ring_block_count != 64U ||
+            defaults.config.capture.ring_frame_size != 2048U ||
+            defaults.config.capture.block_timeout_ms != 64U) {
+            return Fail("capture ring defaults mismatch");
+        }
         if (defaults.config.general.min_saved_bytes_per_packet != 16U) {
             return Fail("general.min_saved_bytes_per_packet default mismatch");
         }
@@ -65,6 +71,10 @@ default_snaplen = 256
 max_capture_len = 128
 max_packets = 123456789
 duration_sec = 90
+ring_block_size = 2097152
+ring_block_count = 8
+ring_frame_size = 4096
+block_timeout_ms = 32
 output = constrained-output.pcap
 
 [tls]
@@ -102,6 +112,12 @@ min_saved_bytes_per_packet = 24
         if (parsed.config.capture.max_packets != 123456789ULL ||
             parsed.config.capture.duration_sec != 90ULL) {
             return Fail("capture live limits did not parse");
+        }
+        if (parsed.config.capture.ring_block_size != 2097152U ||
+            parsed.config.capture.ring_block_count != 8U ||
+            parsed.config.capture.ring_frame_size != 4096U ||
+            parsed.config.capture.block_timeout_ms != 32U) {
+            return Fail("capture ring settings did not parse");
         }
         if (parsed.config.general.min_saved_bytes_per_packet != 24U) {
             return Fail("general.min_saved_bytes_per_packet did not parse");
@@ -152,6 +168,42 @@ min_saved_bytes_per_packet = 24
         }
         if (invalid.error.find("unknown capture.backend value") == std::string::npos) {
             return Fail("unknown backend should report a useful error");
+        }
+    }
+
+    {
+        const ConfigLoadResult invalid = ConfigLoader::LoadFromString(
+            "[capture]\nring_block_size = 0\n",
+            "invalid-ring-block-size.ini");
+        if (invalid) {
+            return Fail("zero ring_block_size should fail");
+        }
+    }
+
+    {
+        const ConfigLoadResult invalid = ConfigLoader::LoadFromString(
+            "[capture]\nring_block_count = 0\n",
+            "invalid-ring-block-count.ini");
+        if (invalid) {
+            return Fail("zero ring_block_count should fail");
+        }
+    }
+
+    {
+        const ConfigLoadResult invalid = ConfigLoader::LoadFromString(
+            "[capture]\nring_frame_size = 0\n",
+            "invalid-ring-frame-size.ini");
+        if (invalid) {
+            return Fail("zero ring_frame_size should fail");
+        }
+    }
+
+    {
+        const ConfigLoadResult invalid = ConfigLoader::LoadFromString(
+            "[capture]\nring_block_size = 4097\nring_frame_size = 2048\n",
+            "invalid-ring-multiple.ini");
+        if (invalid) {
+            return Fail("ring_block_size not multiple of ring_frame_size should fail");
         }
     }
 

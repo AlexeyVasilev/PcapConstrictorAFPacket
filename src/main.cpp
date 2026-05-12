@@ -13,6 +13,7 @@
 #endif
 
 #include "capture/AfPacketCapture.hpp"
+#include "capture/AfPacketTpacketV3Capture.hpp"
 #include "config/ConfigLoader.hpp"
 #include "offline/OfflinePacketFeed.hpp"
 #include "policy/LiveCapturePolicy.hpp"
@@ -87,7 +88,8 @@ void PrintCaptureStats(std::ostream& output, const CaptureStats& stats) {
            << "quic_fallback: " << stats.quic_fallback << '\n';
 }
 
-void FinalizeLiveStats(CaptureStats& stats, const AfPacketCapture& capture) {
+template <typename CaptureT>
+void FinalizeLiveStats(CaptureStats& stats, const CaptureT& capture) {
     stats.bytes_saved = stats.bytes_input - stats.bytes_output;
     stats.receive_errors = capture.non_fatal_receive_errors();
 
@@ -116,6 +118,13 @@ void PrintLiveCaptureStart(const PolicyConfig& config) {
               << "output: " << config.capture.output.string() << '\n'
               << "default_snaplen: " << config.capture.default_snaplen << '\n'
               << "max_capture_len: " << config.capture.max_capture_len << '\n';
+
+    if (config.capture.backend == CaptureBackend::TpacketV3) {
+        std::cout << "ring_block_size: " << config.capture.ring_block_size << '\n'
+                  << "ring_block_count: " << config.capture.ring_block_count << '\n'
+                  << "ring_frame_size: " << config.capture.ring_frame_size << '\n'
+                  << "block_timeout_ms: " << config.capture.block_timeout_ms << '\n';
+    }
 
     if (config.capture.max_packets != 0U) {
         std::cout << "max_packets: " << config.capture.max_packets << '\n';
@@ -167,122 +176,137 @@ int RunLiveCapture(const PolicyConfig& config) {
         return 1;
     }
 
-    if (config.capture.backend == CaptureBackend::TpacketV3) {
-        std::cerr << "Live capture error: capture backend 'tpacket_v3' is not implemented yet\n";
-        return 1;
-    }
-
     g_stop_requested = 0;
     InstallSignalHandlers();
 
     const std::uint32_t output_snaplen =
         std::min(config.capture.default_snaplen, config.capture.max_capture_len);
-    const std::uint32_t receive_buffer_size =
-        std::max(config.capture.max_capture_len, 65535U);
 
-    AfPacketCapture capture(receive_buffer_size);
-    if (!capture.Open(config.capture.interface)) {
-        std::cerr << "Live capture error: " << capture.error_message() << '\n';
-        return 1;
-    }
-
-    std::ofstream output_stream(config.capture.output, std::ios::binary);
-    if (!output_stream) {
-        std::cerr << "Live capture error: failed to open output file '"
-                  << config.capture.output.string() << "'.\n";
-        return 1;
-    }
-
-    PcapWriter writer(output_stream, output_snaplen);
-    LiveCapturePolicy policy(config);
-    CaptureStats stats;
-    const auto start_time = std::chrono::steady_clock::now();
-
-    try {
-        writer.WriteGlobalHeader();
-    } catch (const std::exception& exception) {
-        std::cerr << "Live capture error: " << exception.what() << '\n';
-        return 1;
-    }
-
-    PrintLiveCaptureStart(config);
-
-    std::string_view stop_reason = "signal";
-    while (g_stop_requested == 0) {
-        if (config.capture.max_packets != 0U &&
-            stats.packets_total >= config.capture.max_packets) {
-            stop_reason = "max_packets limit reached";
-            break;
-        }
-
-        if (DurationLimitReached(start_time, config.capture.duration_sec)) {
-            stop_reason = "duration_sec limit reached";
-            break;
-        }
-
-        CapturedPacket packet;
-        const AfPacketReceiveStatus status =
-            capture.ReceiveNext(packet, &g_stop_requested);
-
-        if (status == AfPacketReceiveStatus::Interrupted) {
-            stop_reason = g_stop_requested != 0 ? "signal received" : "interrupted";
-            break;
-        }
-
-        if (status == AfPacketReceiveStatus::Timeout) {
-            continue;
-        }
-
-        if (status == AfPacketReceiveStatus::Error) {
-            FinalizeLiveStats(stats, capture);
-            std::cerr << "Live capture error: " << capture.error_message() << '\n';
-            if (stats.packets_total != 0U || stats.receive_errors != 0U) {
-                std::cerr << "Partial stats:\n";
-                PrintCaptureStats(std::cerr, stats);
-            }
+    auto run_capture_loop = [&](auto& capture) -> int {
+        std::ofstream output_stream(config.capture.output, std::ios::binary);
+        if (!output_stream) {
+            std::cerr << "Live capture error: failed to open output file '"
+                      << config.capture.output.string() << "'.\n";
             return 1;
         }
 
-        const LiveCaptureDecision decision = policy.Evaluate(packet);
+        PcapWriter writer(output_stream, output_snaplen);
+        LiveCapturePolicy policy(config);
+        CaptureStats stats;
+        const auto start_time = std::chrono::steady_clock::now();
 
         try {
-            writer.WritePacket(packet, decision.output_len);
+            writer.WriteGlobalHeader();
         } catch (const std::exception& exception) {
             std::cerr << "Live capture error: " << exception.what() << '\n';
             return 1;
         }
 
-        ++stats.packets_total;
-        ++stats.packets_written;
-        stats.bytes_input += packet.captured_len();
-        stats.bytes_output += decision.output_len;
-        AccumulateDecisionStats(stats, decision.reason);
+        PrintLiveCaptureStart(config);
 
-        if (config.capture.max_packets != 0U &&
-            stats.packets_total >= config.capture.max_packets) {
-            stop_reason = "max_packets limit reached";
-            break;
+        std::string_view stop_reason = "signal";
+        while (g_stop_requested == 0) {
+            if (config.capture.max_packets != 0U &&
+                stats.packets_total >= config.capture.max_packets) {
+                stop_reason = "max_packets limit reached";
+                break;
+            }
+
+            if (DurationLimitReached(start_time, config.capture.duration_sec)) {
+                stop_reason = "duration_sec limit reached";
+                break;
+            }
+
+            CapturedPacket packet;
+            const AfPacketReceiveStatus status =
+                capture.ReceiveNext(packet, &g_stop_requested);
+
+            if (status == AfPacketReceiveStatus::Interrupted) {
+                stop_reason = g_stop_requested != 0 ? "signal received" : "interrupted";
+                break;
+            }
+
+            if (status == AfPacketReceiveStatus::Timeout) {
+                continue;
+            }
+
+            if (status == AfPacketReceiveStatus::Error) {
+                FinalizeLiveStats(stats, capture);
+                std::cerr << "Live capture error: " << capture.error_message() << '\n';
+                if (stats.packets_total != 0U || stats.receive_errors != 0U) {
+                    std::cerr << "Partial stats:\n";
+                    PrintCaptureStats(std::cerr, stats);
+                }
+                return 1;
+            }
+
+            const LiveCaptureDecision decision = policy.Evaluate(packet);
+
+            try {
+                writer.WritePacket(packet, decision.output_len);
+            } catch (const std::exception& exception) {
+                std::cerr << "Live capture error: " << exception.what() << '\n';
+                return 1;
+            }
+
+            ++stats.packets_total;
+            ++stats.packets_written;
+            stats.bytes_input += packet.captured_len();
+            stats.bytes_output += decision.output_len;
+            AccumulateDecisionStats(stats, decision.reason);
+
+            if (config.capture.max_packets != 0U &&
+                stats.packets_total >= config.capture.max_packets) {
+                stop_reason = "max_packets limit reached";
+                break;
+            }
         }
+
+        if (g_stop_requested != 0 && stop_reason == "signal") {
+            stop_reason = "signal received";
+        } else if (g_stop_requested == 0 &&
+                   stop_reason == "signal" &&
+                   DurationLimitReached(start_time, config.capture.duration_sec)) {
+            stop_reason = "duration_sec limit reached";
+        } else if (g_stop_requested == 0 &&
+                   stop_reason == "signal" &&
+                   config.capture.max_packets != 0U &&
+                   stats.packets_total >= config.capture.max_packets) {
+            stop_reason = "max_packets limit reached";
+        } else if (stop_reason == "signal") {
+            stop_reason = "stopped";
+        }
+
+        FinalizeLiveStats(stats, capture);
+        PrintLiveCaptureStop(stop_reason, stats);
+        return 0;
+    };
+
+    if (config.capture.backend == CaptureBackend::Recvmsg) {
+        const std::uint32_t receive_buffer_size =
+            std::max(config.capture.max_capture_len, 65535U);
+
+        AfPacketCapture capture(receive_buffer_size);
+        if (!capture.Open(config.capture.interface)) {
+            std::cerr << "Live capture error: " << capture.error_message() << '\n';
+            return 1;
+        }
+
+        return run_capture_loop(capture);
     }
 
-    if (g_stop_requested != 0 && stop_reason == "signal") {
-        stop_reason = "signal received";
-    } else if (g_stop_requested == 0 &&
-               stop_reason == "signal" &&
-               DurationLimitReached(start_time, config.capture.duration_sec)) {
-        stop_reason = "duration_sec limit reached";
-    } else if (g_stop_requested == 0 &&
-               stop_reason == "signal" &&
-               config.capture.max_packets != 0U &&
-               stats.packets_total >= config.capture.max_packets) {
-        stop_reason = "max_packets limit reached";
-    } else if (stop_reason == "signal") {
-        stop_reason = "stopped";
+    if (config.capture.backend == CaptureBackend::TpacketV3) {
+        AfPacketTpacketV3Capture capture;
+        if (!capture.Open(config.capture)) {
+            std::cerr << "Live capture error: " << capture.error_message() << '\n';
+            return 1;
+        }
+
+        return run_capture_loop(capture);
     }
 
-    FinalizeLiveStats(stats, capture);
-    PrintLiveCaptureStop(stop_reason, stats);
-    return 0;
+    std::cerr << "Live capture error: unsupported capture backend\n";
+    return 1;
 }
 
 }  // namespace

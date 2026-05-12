@@ -10,6 +10,7 @@ include(CTest)
 
 add_library(PcapConstrictorAFPacketCore STATIC
     src/capture/AfPacketCapture.cpp
+    src/capture/AfPacketTpacketV3Capture.cpp
     src/config/ConfigLoader.cpp
     src/decode/PacketDecode.cpp
     src/offline/OfflinePacketFeed.cpp

@@ -179,6 +179,27 @@ bool AssignValue(PolicyConfig& config,
             return true;
         }
 
+        if (normalized_key == "ring_block_size" ||
+            normalized_key == "ring_block_count" ||
+            normalized_key == "ring_frame_size" ||
+            normalized_key == "block_timeout_ms") {
+            std::uint32_t parsed = 0;
+            if (!ParseUint32(value, parsed)) {
+                return invalid_value("invalid unsigned integer for capture ring option");
+            }
+
+            if (normalized_key == "ring_block_size") {
+                config.capture.ring_block_size = parsed;
+            } else if (normalized_key == "ring_block_count") {
+                config.capture.ring_block_count = parsed;
+            } else if (normalized_key == "ring_frame_size") {
+                config.capture.ring_frame_size = parsed;
+            } else {
+                config.capture.block_timeout_ms = parsed;
+            }
+            return true;
+        }
+
         if (normalized_key == "max_packets" ||
             normalized_key == "duration_sec") {
             std::uint64_t parsed = 0;
@@ -413,6 +434,29 @@ ConfigLoadResult ConfigLoader::LoadFromString(std::string_view text,
 
     if (result.config.capture.max_capture_len == 0U) {
         result.error = FormatError(source_name, 0U, "capture.max_capture_len must be greater than 0");
+        return result;
+    }
+
+    if (result.config.capture.ring_block_size == 0U) {
+        result.error = FormatError(source_name, 0U, "capture.ring_block_size must be greater than 0");
+        return result;
+    }
+
+    if (result.config.capture.ring_block_count == 0U) {
+        result.error = FormatError(source_name, 0U, "capture.ring_block_count must be greater than 0");
+        return result;
+    }
+
+    if (result.config.capture.ring_frame_size == 0U) {
+        result.error = FormatError(source_name, 0U, "capture.ring_frame_size must be greater than 0");
+        return result;
+    }
+
+    if (result.config.capture.ring_block_size % result.config.capture.ring_frame_size != 0U) {
+        result.error = FormatError(
+            source_name,
+            0U,
+            "capture.ring_block_size must be a multiple of capture.ring_frame_size");
         return result;
     }
 

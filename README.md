@@ -2,7 +2,7 @@
 
 PcapConstrictorAFPacket is a Linux-oriented live recorder that is planned to reuse PcapConstrictor-style TLS/QUIC-aware adaptive capture logic for AF_PACKET capture.
 
-Current status: offline classic PCAP feed mode is available, basic Linux AF_PACKET live capture is available, Ethernet/IP/TCP/UDP decode scaffolding is available, TLS Application Data constriction is available, QUIC Long Header CID learning plus matched Short Header constriction is available, and golden offline PCAP compatibility tests are available.
+Current status: offline classic PCAP feed mode is available, Linux AF_PACKET live capture is available with both `recvmsg` and experimental `tpacket_v3` backends, Ethernet/IP/TCP/UDP decode scaffolding is available, TLS Application Data constriction is available, QUIC Long Header CID learning plus matched Short Header constriction is available, and golden offline PCAP compatibility tests are available.
 
 ## Current scope
 
@@ -13,7 +13,7 @@ Current status: offline classic PCAP feed mode is available, basic Linux AF_PACK
 - Flow-aware QUIC Long Header CID learning and matched Short Header prefix constriction for matching UDP packets
 - Little-endian classic PCAP writer (`DLT_EN10MB`, microsecond timestamps)
 - Classic PCAP offline reader/feed path for reproducible policy validation
-- Basic Linux AF_PACKET raw-socket live capture
+- Linux AF_PACKET live capture with a simple `recvmsg` path and an experimental `TPACKET_V3` / `PACKET_MMAP` ring path
 - Ethernet/VLAN/IP/TCP/UDP decode scaffolding for policy classification
 - Minimal standalone tests without an external framework
 - Golden offline compatibility tests that compare constrained PCAPs byte-for-byte with inherited PcapConstrictor fixtures
@@ -21,7 +21,6 @@ Current status: offline classic PCAP feed mode is available, basic Linux AF_PACK
 ## Not in this milestone
 
 - QUIC decryption, deep frame parsing, and connection migration
-- `PACKET_MMAP` / `TPACKET_V3`
 - libpcap, DPDK, pcapng, GUI, or multi-interface capture
 
 ## Example usage
@@ -48,13 +47,33 @@ Current live capture controls under `[capture]`:
 - `capture.backend`
 - `capture.max_packets`
 - `capture.duration_sec`
+- `capture.ring_block_size`
+- `capture.ring_block_count`
+- `capture.ring_frame_size`
+- `capture.block_timeout_ms`
 
 `capture.backend` currently supports:
 
 - `recvmsg`
-- `tpacket_v3` is recognized for future use but is not implemented yet
+- `tpacket_v3`
 
-`recvmsg` is the current simple AF_PACKET backend. `capture.max_packets` and `capture.duration_sec` both default to `0`, which means unlimited. These bounded smoke/demo controls do not affect offline mode.
+`recvmsg` is the current simple default AF_PACKET backend. `tpacket_v3` uses a Linux `PACKET_MMAP` RX ring and is still experimental. `capture.max_packets` and `capture.duration_sec` both default to `0`, which means unlimited. These bounded smoke/demo controls do not affect offline mode.
+
+Example `tpacket_v3` configuration:
+
+```ini
+[capture]
+backend = tpacket_v3
+interface = enp0s3
+output = tpacket_v3_output.pcap
+default_snaplen = 65535
+max_capture_len = 65535
+max_packets = 100
+ring_block_size = 1048576
+ring_block_count = 64
+ring_frame_size = 2048
+block_timeout_ms = 64
+```
 
 Current TLS configuration keys:
 
@@ -98,4 +117,4 @@ Live capture prints a final stats block on normal stop, bounded stop, or signal 
 ## Future milestones
 
 1. Deeper TLS/QUIC policy coverage without changing capture plumbing
-2. `PACKET_MMAP` / `TPACKET_V3`
+2. Better `TPACKET_V3` tuning and robustness
