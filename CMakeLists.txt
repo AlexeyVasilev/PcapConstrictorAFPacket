@@ -39,6 +39,7 @@ target_link_libraries(PcapConstrictorAFPacket
 
 add_executable(PcapConstrictorAFPacketTests
     tests/AfPacketCaptureTests.cpp
+    tests/AfPacketTpacketV3CaptureTests.cpp
     tests/TestMain.cpp
     tests/ConfigLoaderTests.cpp
     tests/GoldenOfflineWorkflowTests.cpp

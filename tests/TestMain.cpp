@@ -6,6 +6,7 @@ int RunLivePolicySmokeTests();
 int RunPcapReaderTests();
 int RunOfflinePacketFeedTests();
 int RunAfPacketCaptureTests();
+int RunAfPacketTpacketV3CaptureTests();
 int RunPacketDecodeTests();
 int RunLivePolicyClassificationTests();
 int RunLivePolicyQuicTests();
@@ -22,6 +23,7 @@ int main() {
     failures += RunPcapReaderTests();
     failures += RunOfflinePacketFeedTests();
     failures += RunAfPacketCaptureTests();
+    failures += RunAfPacketTpacketV3CaptureTests();
     failures += RunPacketDecodeTests();
     failures += RunLivePolicyClassificationTests();
     failures += RunLivePolicyQuicTests();

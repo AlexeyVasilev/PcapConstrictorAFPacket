@@ -27,6 +27,40 @@ AfPacketTpacketV3Capture::~AfPacketTpacketV3Capture() {
     Close();
 }
 
+bool AfPacketTpacketV3Capture::ValidateRingLayout(const PolicyConfig::CaptureOptions& config,
+                                                  std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+
+    auto fail = [&](std::string_view message) {
+        if (error_message != nullptr) {
+            *error_message = std::string(message);
+        }
+        return false;
+    };
+
+    if (config.ring_block_size == 0U) {
+        return fail("capture.ring_block_size must be greater than 0");
+    }
+    if (config.ring_block_count == 0U) {
+        return fail("capture.ring_block_count must be greater than 0");
+    }
+    if (config.ring_frame_size == 0U) {
+        return fail("capture.ring_frame_size must be greater than 0");
+    }
+    if (config.ring_block_size % config.ring_frame_size != 0U) {
+        return fail("capture.ring_block_size must be a multiple of capture.ring_frame_size");
+    }
+
+    return true;
+}
+
+std::uint32_t AfPacketTpacketV3Capture::ConvertNanosecondsToMicroseconds(
+    const std::uint32_t nanoseconds) noexcept {
+    return std::min(nanoseconds / 1000U, 999999U);
+}
+
 bool AfPacketTpacketV3Capture::Open(const PolicyConfig::CaptureOptions& config) {
     Close();
     error_message_.clear();
@@ -193,8 +227,8 @@ AfPacketReceiveStatus AfPacketTpacketV3Capture::ReceiveNext(
 
             const std::size_t packet_offset = current_packet_offset_;
             if (packet_offset + sizeof(tpacket3_hdr) > block_size_) {
-                SetError("invalid TPACKET_V3 packet header offset");
-                return AfPacketReceiveStatus::Error;
+                DiscardCurrentBlock();
+                continue;
             }
 
             const auto* packet_header =
@@ -204,21 +238,23 @@ AfPacketReceiveStatus AfPacketTpacketV3Capture::ReceiveNext(
             const std::size_t packet_data_end =
                 packet_data_offset + static_cast<std::size_t>(packet_header->tp_snaplen);
             if (packet_data_offset > block_size_ || packet_data_end > block_size_) {
-                SetError("invalid TPACKET_V3 packet data bounds");
-                return AfPacketReceiveStatus::Error;
+                DiscardCurrentBlock();
+                continue;
             }
 
             if (packet_header->tp_snaplen > packet_header->tp_len) {
-                SetError("invalid TPACKET_V3 packet lengths");
-                return AfPacketReceiveStatus::Error;
+                DiscardCurrentBlock();
+                continue;
             }
 
             PacketDirection direction = PacketDirection::Unknown;
             std::uint32_t packet_ifindex = interface_index_;
-            const std::size_t sockaddr_offset =
-                packet_offset + TPACKET_ALIGN(sizeof(tpacket3_hdr));
-            if (sockaddr_offset + sizeof(sockaddr_ll) <= block_size_ &&
-                packet_header->tp_mac >= TPACKET_ALIGN(sizeof(tpacket3_hdr)) + sizeof(sockaddr_ll)) {
+            const std::size_t sockaddr_offset = packet_offset + TPACKET_ALIGN(sizeof(tpacket3_hdr));
+            // sockaddr_ll metadata is best-effort in the ring. If it is not safely
+            // readable, keep the packet and fall back to Unknown direction.
+            if (packet_header->tp_mac >= TPACKET_ALIGN(sizeof(tpacket3_hdr)) + sizeof(sockaddr_ll) &&
+                sockaddr_offset <= block_size_ &&
+                sockaddr_offset + sizeof(sockaddr_ll) <= packet_data_offset) {
                 const auto* packet_address =
                     reinterpret_cast<const sockaddr_ll*>(block_base + sockaddr_offset);
                 direction = AfPacketCapture::MapPacketTypeToDirection(packet_address->sll_pkttype);
@@ -227,9 +263,9 @@ AfPacketReceiveStatus AfPacketTpacketV3Capture::ReceiveNext(
                 }
             }
 
-            const auto packet_time =
-                std::chrono::system_clock::time_point(std::chrono::seconds(packet_header->tp_sec) +
-                                                      std::chrono::nanoseconds(packet_header->tp_nsec));
+            const auto packet_time = std::chrono::system_clock::time_point(
+                std::chrono::seconds(packet_header->tp_sec) +
+                std::chrono::microseconds(ConvertNanosecondsToMicroseconds(packet_header->tp_nsec)));
 
             packet = CapturedPacket{
                 .packet = PacketView(
@@ -244,12 +280,15 @@ AfPacketReceiveStatus AfPacketTpacketV3Capture::ReceiveNext(
 
             ++current_block_packet_index_;
             if (current_block_packet_index_ < current_block_packet_count_) {
-                if (packet_header->tp_next_offset == 0U) {
-                    SetError("invalid TPACKET_V3 packet chain");
-                    return AfPacketReceiveStatus::Error;
+                const std::size_t next_packet_offset =
+                    packet_offset + static_cast<std::size_t>(packet_header->tp_next_offset);
+                if (packet_header->tp_next_offset == 0U ||
+                    next_packet_offset + sizeof(tpacket3_hdr) > block_size_) {
+                    ++non_fatal_receive_errors_;
+                    current_block_packet_index_ = current_block_packet_count_;
+                } else {
+                    current_packet_offset_ += packet_header->tp_next_offset;
                 }
-
-                current_packet_offset_ += packet_header->tp_next_offset;
             }
 
             return AfPacketReceiveStatus::Packet;
@@ -354,22 +393,19 @@ void AfPacketTpacketV3Capture::SetError(std::string message) {
     error_message_ = std::move(message);
 }
 
+void AfPacketTpacketV3Capture::DiscardCurrentBlock() noexcept {
+#if defined(__linux__)
+    ++non_fatal_receive_errors_;
+    error_message_.clear();
+    ReleaseCurrentBlock();
+#else
+    error_message_.clear();
+#endif
+}
+
 #if defined(__linux__)
 bool AfPacketTpacketV3Capture::ValidateRingConfiguration(const PolicyConfig::CaptureOptions& config) {
-    if (config.ring_block_size == 0U) {
-        SetError("capture.ring_block_size must be greater than 0");
-        return false;
-    }
-    if (config.ring_block_count == 0U) {
-        SetError("capture.ring_block_count must be greater than 0");
-        return false;
-    }
-    if (config.ring_frame_size == 0U) {
-        SetError("capture.ring_frame_size must be greater than 0");
-        return false;
-    }
-    if (config.ring_block_size % config.ring_frame_size != 0U) {
-        SetError("capture.ring_block_size must be a multiple of capture.ring_frame_size");
+    if (!ValidateRingLayout(config, &error_message_)) {
         return false;
     }
 
@@ -471,8 +507,12 @@ bool AfPacketTpacketV3Capture::ActivateCurrentBlock() {
         return false;
     }
 
-    if (block_desc->hdr.bh1.offset_to_first_pkt >= block_size_) {
-        SetError("invalid TPACKET_V3 first packet offset");
+    const std::size_t first_packet_offset = block_desc->hdr.bh1.offset_to_first_pkt;
+    const std::size_t minimum_packet_header_size = sizeof(tpacket3_hdr);
+    if (first_packet_offset > block_size_ ||
+        first_packet_offset + minimum_packet_header_size > block_size_ ||
+        block_desc->hdr.bh1.num_pkts > block_size_ / minimum_packet_header_size) {
+        DiscardCurrentBlock();
         return false;
     }
 

@@ -17,6 +17,11 @@ public:
     AfPacketTpacketV3Capture() = default;
     ~AfPacketTpacketV3Capture();
 
+    [[nodiscard]] static bool ValidateRingLayout(const PolicyConfig::CaptureOptions& config,
+                                                 std::string* error_message = nullptr);
+    [[nodiscard]] static std::uint32_t ConvertNanosecondsToMicroseconds(
+        std::uint32_t nanoseconds) noexcept;
+
     [[nodiscard]] bool Open(const PolicyConfig::CaptureOptions& config);
     [[nodiscard]] AfPacketReceiveStatus ReceiveNext(
         CapturedPacket& packet,
@@ -30,6 +35,7 @@ public:
 private:
     void Close() noexcept;
     void SetError(std::string message);
+    void DiscardCurrentBlock() noexcept;
 
 #if defined(__linux__)
     [[nodiscard]] bool ValidateRingConfiguration(const PolicyConfig::CaptureOptions& config);
