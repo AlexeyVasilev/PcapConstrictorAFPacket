@@ -26,6 +26,9 @@ int RunConfigLoaderTests() {
         if (defaults.config.capture.backend != CaptureBackend::Recvmsg) {
             return Fail("capture.backend default mismatch");
         }
+        if (defaults.config.capture.promiscuous) {
+            return Fail("capture.promiscuous default mismatch");
+        }
         if (defaults.config.capture.max_packets != 0U) {
             return Fail("capture.max_packets default mismatch");
         }
@@ -67,6 +70,7 @@ int RunConfigLoaderTests() {
 [capture]
 backend = recvmsg
 interface = eth0
+promiscuous = true
 default_snaplen = 256
 max_capture_len = 128
 max_packets = 123456789
@@ -108,6 +112,9 @@ min_saved_bytes_per_packet = 24
         }
         if (parsed.config.capture.backend != CaptureBackend::Recvmsg) {
             return Fail("capture.backend recvmsg did not parse");
+        }
+        if (!parsed.config.capture.promiscuous) {
+            return Fail("capture.promiscuous did not parse");
         }
         if (parsed.config.capture.max_packets != 123456789ULL ||
             parsed.config.capture.duration_sec != 90ULL) {
@@ -151,12 +158,34 @@ min_saved_bytes_per_packet = 24
 
     {
         const ConfigLoadResult parsed =
+            ConfigLoader::LoadFromString("[capture]\npromiscuous = false\n", "promiscuous-false.ini");
+        if (!parsed) {
+            return Fail("capture.promiscuous=false should parse");
+        }
+        if (parsed.config.capture.promiscuous) {
+            return Fail("capture.promiscuous=false mismatch");
+        }
+    }
+
+    {
+        const ConfigLoadResult parsed =
             ConfigLoader::LoadFromString("[capture]\nbackend = tpacket_v3\n", "future.ini");
         if (!parsed) {
             return Fail("recognized future backend should parse");
         }
         if (parsed.config.capture.backend != CaptureBackend::TpacketV3) {
             return Fail("capture.backend tpacket_v3 did not parse");
+        }
+    }
+
+    {
+        const ConfigLoadResult invalid =
+            ConfigLoader::LoadFromString("[capture]\npromiscuous = maybe\n", "invalid-promiscuous.ini");
+        if (invalid) {
+            return Fail("invalid capture.promiscuous should fail");
+        }
+        if (invalid.error.find("invalid boolean for capture.promiscuous") == std::string::npos) {
+            return Fail("invalid capture.promiscuous should report a useful error");
         }
     }
 

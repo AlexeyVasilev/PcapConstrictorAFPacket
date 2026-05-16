@@ -1,4 +1,5 @@
 #include "capture/AfPacketCapture.hpp"
+#include "capture/AfPacketSocketOptions.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -26,7 +27,7 @@ AfPacketCapture::~AfPacketCapture() {
     Close();
 }
 
-bool AfPacketCapture::Open(const std::string_view interface_name) {
+bool AfPacketCapture::Open(const std::string_view interface_name, const bool promiscuous) {
     Close();
     error_message_.clear();
     non_fatal_receive_errors_ = 0;
@@ -86,6 +87,16 @@ bool AfPacketCapture::Open(const std::string_view interface_name) {
         ::close(socket_fd);
         SetError(out.str());
         return false;
+    }
+
+    if (promiscuous) {
+        std::string membership_error;
+        if (!EnablePromiscuousMembership(socket_fd, ifindex, interface_name, membership_error)) {
+            ::close(socket_fd);
+            SetError(membership_error);
+            return false;
+        }
+        promiscuous_enabled_ = true;
     }
 
     socket_fd_ = socket_fd;
@@ -237,9 +248,13 @@ PacketDirection AfPacketCapture::MapPacketTypeToDirection(const unsigned int pac
 void AfPacketCapture::Close() noexcept {
 #if defined(__linux__)
     if (socket_fd_ >= 0) {
+        if (promiscuous_enabled_) {
+            DisablePromiscuousMembership(socket_fd_, interface_index_);
+        }
         ::close(socket_fd_);
         socket_fd_ = -1;
     }
+    promiscuous_enabled_ = false;
 #endif
     interface_index_ = 0;
     non_fatal_receive_errors_ = 0;

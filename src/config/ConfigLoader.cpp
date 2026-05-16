@@ -174,6 +174,15 @@ bool AssignValue(PolicyConfig& config,
             return true;
         }
 
+        if (normalized_key == "promiscuous") {
+            bool parsed = false;
+            if (!ParseBool(value, parsed)) {
+                return invalid_value("invalid boolean for capture.promiscuous");
+            }
+            config.capture.promiscuous = parsed;
+            return true;
+        }
+
         if (normalized_key == "output") {
             config.capture.output = Trim(value);
             return true;

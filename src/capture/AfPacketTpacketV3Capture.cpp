@@ -1,4 +1,5 @@
 #include "capture/AfPacketTpacketV3Capture.hpp"
+#include "capture/AfPacketSocketOptions.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -175,6 +176,19 @@ bool AfPacketTpacketV3Capture::Open(const PolicyConfig::CaptureOptions& config) 
         ::close(socket_fd);
         SetError(out.str());
         return false;
+    }
+
+    if (config.promiscuous) {
+        std::string membership_error;
+        if (!EnablePromiscuousMembership(socket_fd, ifindex, config.interface, membership_error)) {
+            tpacket_req3 empty_request{};
+            (void)::setsockopt(socket_fd, SOL_PACKET, PACKET_RX_RING, &empty_request, sizeof(empty_request));
+            ::munmap(mapped, mapping_size);
+            ::close(socket_fd);
+            SetError(membership_error);
+            return false;
+        }
+        promiscuous_enabled_ = true;
     }
 
     socket_fd_ = socket_fd;
@@ -366,6 +380,9 @@ void AfPacketTpacketV3Capture::Close() noexcept {
     current_packet_offset_ = 0;
 
     if (socket_fd_ >= 0) {
+        if (promiscuous_enabled_) {
+            DisablePromiscuousMembership(socket_fd_, interface_index_);
+        }
         tpacket_req3 empty_request{};
         (void)::setsockopt(socket_fd_, SOL_PACKET, PACKET_RX_RING, &empty_request, sizeof(empty_request));
     }
@@ -384,6 +401,7 @@ void AfPacketTpacketV3Capture::Close() noexcept {
     block_size_ = 0;
     block_count_ = 0;
     poll_timeout_ms_ = 1000;
+    promiscuous_enabled_ = false;
 #endif
     interface_index_ = 0;
     non_fatal_receive_errors_ = 0;

@@ -56,6 +56,7 @@ private:
     std::uint32_t current_block_packet_count_{0};
     std::uint32_t current_packet_offset_{0};
     bool current_block_active_{false};
+    bool promiscuous_enabled_{false};
 #endif
 
     std::string error_message_{};

@@ -33,7 +33,7 @@ public:
     explicit AfPacketCapture(std::uint32_t buffer_size = 65535U);
     ~AfPacketCapture();
 
-    [[nodiscard]] bool Open(std::string_view interface_name);
+    [[nodiscard]] bool Open(std::string_view interface_name, bool promiscuous = false);
     [[nodiscard]] AfPacketReceiveStatus ReceiveNext(
         CapturedPacket& packet,
         const volatile std::sig_atomic_t* stop_requested = nullptr);
@@ -50,6 +50,7 @@ private:
 
 #if defined(__linux__)
     int socket_fd_{-1};
+    bool promiscuous_enabled_{false};
 #endif
     std::vector<std::byte> buffer_{};
     std::string error_message_{};

@@ -115,6 +115,7 @@ void PrintLiveCaptureStart(const PolicyConfig& config) {
     std::cout << "Starting live capture.\n"
               << "backend: " << CaptureBackendName(config.capture.backend) << '\n'
               << "interface: " << config.capture.interface << '\n'
+              << "promiscuous: " << (config.capture.promiscuous ? "true" : "false") << '\n'
               << "output: " << config.capture.output.string() << '\n'
               << "default_snaplen: " << config.capture.default_snaplen << '\n'
               << "max_capture_len: " << config.capture.max_capture_len << '\n';
@@ -287,7 +288,7 @@ int RunLiveCapture(const PolicyConfig& config) {
             std::max(config.capture.max_capture_len, 65535U);
 
         AfPacketCapture capture(receive_buffer_size);
-        if (!capture.Open(config.capture.interface)) {
+        if (!capture.Open(config.capture.interface, config.capture.promiscuous)) {
             std::cerr << "Live capture error: " << capture.error_message() << '\n';
             return 1;
         }

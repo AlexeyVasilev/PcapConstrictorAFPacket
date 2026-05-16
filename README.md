@@ -45,6 +45,7 @@ sudo ./PcapConstrictorAFPacket --config config.ini
 Current live capture controls under `[capture]`:
 
 - `capture.backend`
+- `capture.promiscuous`
 - `capture.max_packets`
 - `capture.duration_sec`
 - `capture.ring_block_size`
@@ -57,7 +58,7 @@ Current live capture controls under `[capture]`:
 - `recvmsg`
 - `tpacket_v3`
 
-`recvmsg` is the current simple default AF_PACKET backend. `tpacket_v3` uses a Linux `PACKET_MMAP` RX ring and is still experimental. `capture.max_packets` and `capture.duration_sec` both default to `0`, which means unlimited. These bounded smoke/demo controls do not affect offline mode.
+`recvmsg` is the current simple default AF_PACKET backend. `tpacket_v3` uses a Linux `PACKET_MMAP` RX ring and is still experimental. `capture.promiscuous` defaults to `false`; when set to `true`, both live backends request `PACKET_MR_PROMISC` membership for the selected interface. This uses the same AF_PACKET permissions as normal live capture and may not be meaningful on loopback or some virtual interfaces. `capture.max_packets` and `capture.duration_sec` both default to `0`, which means unlimited. These bounded smoke/demo controls do not affect offline mode.
 
 Example `tpacket_v3` configuration:
 
@@ -65,6 +66,7 @@ Example `tpacket_v3` configuration:
 [capture]
 backend = tpacket_v3
 interface = enp0s3
+promiscuous = true
 output = tpacket_v3_output.pcap
 default_snaplen = 65535
 max_capture_len = 65535
