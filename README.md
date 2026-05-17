@@ -1,123 +1,172 @@
 # PcapConstrictorAFPacket
 
-PcapConstrictorAFPacket is a Linux-oriented live recorder that is planned to reuse PcapConstrictor-style TLS/QUIC-aware adaptive capture logic for AF_PACKET capture.
+PcapConstrictorAFPacket is a Linux AF_PACKET live recorder with TLS/QUIC-aware adaptive PCAP capture. It is intended to reuse richer PcapConstrictor-style policy in userspace, without eBPF verifier constraints.
 
-Current status: offline classic PCAP feed mode is available, Linux AF_PACKET live capture is available with both `recvmsg` and experimental `tpacket_v3` backends, Ethernet/IP/TCP/UDP decode scaffolding is available, TLS Application Data constriction is available, QUIC Long Header CID learning plus matched Short Header constriction is available, and golden offline PCAP compatibility tests are available.
+## Related projects
 
-## Current scope
+- `PcapConstrictor`: the main offline PCAP/PCAPNG constriction tool.
+- `PcapConstrictorBPF`: an experimental Linux TC eBPF recorder.
+- `PcapConstrictorAFPacket`: a userspace Linux live recorder built around AF_PACKET capture.
 
-- C++20 project skeleton with a small CMake setup
-- INI-like config loader with defaults and validation
-- Packet metadata/view types for future live capture integration
-- Length clamping plus TLS Application Data prefix constriction for matching TCP packets
-- Flow-aware QUIC Long Header CID learning and matched Short Header prefix constriction for matching UDP packets
-- Little-endian classic PCAP writer (`DLT_EN10MB`, microsecond timestamps)
-- Classic PCAP offline reader/feed path for reproducible policy validation
-- Linux AF_PACKET live capture with a simple `recvmsg` path and an experimental `TPACKET_V3` / `PACKET_MMAP` ring path
-- Ethernet/VLAN/IP/TCP/UDP decode scaffolding for policy classification
-- Minimal standalone tests without an external framework
-- Golden offline compatibility tests that compare constrained PCAPs byte-for-byte with inherited PcapConstrictor fixtures
+## Current status
 
-## Not in this milestone
+The project is experimental but functional.
 
-- QUIC decryption, deep frame parsing, and connection migration
-- libpcap, DPDK, pcapng, GUI, or multi-interface capture
+- Live capture has been smoke-tested on loopback and a real interface.
+- Both `recvmsg` and `tpacket_v3` backends are available.
+- Optional promiscuous mode, bounded capture, clean shutdown, and final stats are implemented.
+- TLS `final_only` continuation behavior is aligned with the current upstream PcapConstrictor runtime behavior.
+- TLS `stream` and `bulk` policies are recognized in config but are not supported yet.
 
-## Example usage
+## Features
 
-```bash
-./PcapConstrictorAFPacket --help
-sudo ./PcapConstrictorAFPacket --config config.example.ini
-./PcapConstrictorAFPacket --config config.example.ini --offline-input input.pcap
-```
+- Linux AF_PACKET live capture
+- `recvmsg` backend
+- `TPACKET_V3` / `PACKET_MMAP` backend
+- Optional promiscuous mode
+- Classic PCAP output (`DLT_EN10MB`, microsecond timestamps)
+- INI-style config file
+- Bounded live capture with `max_packets` and `duration_sec`
+- Final stats on normal stop, bounded stop, or signal stop
+- Offline classic-PCAP feed mode
+- Golden offline compatibility tests using inherited PcapConstrictor fixtures
+- Ethernet/VLAN/IPv4/IPv6/TCP/UDP decode
+- TLS Application Data constriction with upstream-compatible `final_only` continuation handling
+- QUIC Long Header CID learning and matched Short Header constriction
 
-The binary can now run a deterministic offline pipeline:
+## Basic usage
 
-`input.pcap -> PcapReader -> LiveCapturePolicy -> PcapWriter -> output.pcap`
-
-For live AF_PACKET capture, `CAP_NET_RAW` or root privileges are required.
-Basic live usage remains:
+Live capture:
 
 ```bash
 sudo ./PcapConstrictorAFPacket --config config.ini
 ```
 
-Current live capture controls under `[capture]`:
+Offline feed mode:
 
-- `capture.backend`
-- `capture.promiscuous`
-- `capture.max_packets`
-- `capture.duration_sec`
-- `capture.ring_block_size`
-- `capture.ring_block_count`
-- `capture.ring_frame_size`
-- `capture.block_timeout_ms`
+```bash
+./PcapConstrictorAFPacket --config config.ini --offline-input input.pcap
+```
 
-`capture.backend` currently supports:
+The offline path is deterministic:
 
-- `recvmsg`
-- `tpacket_v3`
+`input.pcap -> PcapReader -> LiveCapturePolicy -> PcapWriter -> output.pcap`
 
-`recvmsg` is the current simple default AF_PACKET backend. `tpacket_v3` uses a Linux `PACKET_MMAP` RX ring and is still experimental. `capture.promiscuous` defaults to `false`; when set to `true`, both live backends request `PACKET_MR_PROMISC` membership for the selected interface. This uses the same AF_PACKET permissions as normal live capture and may not be meaningful on loopback or some virtual interfaces. `capture.max_packets` and `capture.duration_sec` both default to `0`, which means unlimited. These bounded smoke/demo controls do not affect offline mode.
-
-Example `tpacket_v3` configuration:
+## Example config
 
 ```ini
+[general]
+min_saved_bytes_per_packet = 16
+
 [capture]
-backend = tpacket_v3
-interface = enp0s3
-promiscuous = true
-output = tpacket_v3_output.pcap
+backend = recvmsg
+# backend = tpacket_v3
+interface = eth0
+output = output.pcap
+promiscuous = false
 default_snaplen = 65535
 max_capture_len = 65535
-max_packets = 100
+max_packets = 0
+duration_sec = 0
 ring_block_size = 1048576
 ring_block_count = 64
 ring_frame_size = 2048
 block_timeout_ms = 64
+
+[tls]
+enabled = true
+ports = 443, 8443
+app_data_keep_record_bytes = 256
+app_data_continuation_keep_bytes = 64
+app_data_continuation_policy = final_only
+
+[quic]
+enabled = true
+ports = 443
+short_header_keep_packet_bytes = 128
+require_dcid_match = false
+allow_short_header_without_known_dcid = true
+
+[stats]
+enabled = true
 ```
 
-Current TLS configuration keys:
+## Backend notes
 
-- `tls.enabled`
-- `tls.ports`
-- `tls.app_data_keep_record_bytes`
-- `tls.app_data_continuation_keep_bytes`
-- `tls.app_data_continuation_policy`
+- `recvmsg` is the simpler backend and the default.
+- `tpacket_v3` uses a Linux `PACKET_MMAP` RX ring and is intended for lower-overhead capture.
+- `tpacket_v3` is still experimental.
+- Ring settings should usually be left at their defaults unless you are tuning for a specific environment.
 
-AFPacket currently supports the upstream conservative TLS continuation behavior for `final_only`. Newer `stream` and `bulk` continuation policies exist in the main PcapConstrictor project, but they are only recognized and remain unsupported in PcapConstrictorAFPacket for now.
+## Permissions
 
-Malformed or ambiguous TLS falls back conservatively to the existing default `snaplen` / `max_capture_len` behavior.
+Using `sudo` is the simplest way to run live capture:
 
-Current QUIC configuration keys:
+```bash
+sudo ./PcapConstrictorAFPacket --config config.ini
+```
 
-- `quic.enabled`
-- `quic.ports`
-- `quic.short_header_keep_packet_bytes`
-- `quic.require_dcid_match`
-- `quic.allow_short_header_without_known_dcid`
+`CAP_NET_RAW` can also be granted to the binary:
 
-Current QUIC handling is intentionally shallow. This milestone learns source CIDs from QUIC Long Header packets and constricts only matched Short Header packets using the learned destination CID for the opposite direction.
+```bash
+sudo setcap cap_net_raw+ep ./PcapConstrictorAFPacket
+```
 
-Unknown, malformed, unmapped, or mismatched QUIC short headers fall back conservatively to the existing default `snaplen` / `max_capture_len` behavior.
+Both live backends use the same AF_PACKET permissions. Promiscuous mode does not require a different execution model, but it may not be meaningful on loopback or some virtual interfaces.
 
-General configuration keys:
+## TLS and QUIC policy notes
 
-- `general.min_saved_bytes_per_packet`
+TLS:
 
-This threshold applies only to protocol-aware extra constriction. Ordinary `default_snaplen` / `max_capture_len` clamping still behaves independently.
+- `tls.app_data_continuation_policy = final_only` is supported.
+- `stream` and `bulk` are recognized but intentionally unsupported for now.
+- Malformed or ambiguous TLS falls back conservatively to normal `default_snaplen` / `max_capture_len` behavior.
+- No TLS decryption is performed.
 
-## Tests
+QUIC:
 
-- Unit tests cover config parsing, PCAP I/O, decode, TLS, QUIC, and offline/live-policy helper logic.
-- Offline feed tests validate the deterministic `input.pcap -> policy -> output.pcap` path without live capture.
-- Golden offline compatibility tests compare generated constrained PCAPs byte-for-byte against committed expected outputs inherited from PcapConstrictor.
+- Current handling is invariant-header/CID based.
+- The policy learns source CIDs from Long Header packets and constricts only matched Short Header packets.
+- Unknown, malformed, unmapped, or mismatched packets fall back conservatively.
+- No QUIC decryption or connection migration support is implemented.
 
-Golden tests do not use live AF_PACKET capture, root privileges, or `CAP_NET_RAW`.
+## Stats
 
-Live capture prints a final stats block on normal stop, bounded stop, or signal stop. This includes user-space counters such as packet and byte totals, plus `kernel_packets` and `kernel_drops` when Linux `PACKET_STATISTICS` is available at shutdown.
+The final stats block may include:
 
-## Future milestones
+- `packets_total`: packets accepted into the policy pipeline.
+- `packets_written`: packets emitted to the output PCAP.
+- `bytes_input`: total original input bytes observed by the pipeline.
+- `bytes_output`: total saved bytes written to the output PCAP.
+- `bytes_saved`: `bytes_input - bytes_output`.
+- `receive_errors`: internal receive/setup or malformed-capture-structure errors.
+- `kernel_packets`: kernel-side packet count from `PACKET_STATISTICS` when available.
+- `kernel_drops`: kernel-side drop count from `PACKET_STATISTICS` when available.
+- `tls_appdata_constricted`: TLS packets shortened by policy.
+- `tls_fallback`: TLS candidates that fell back conservatively.
+- `quic_long_header`: QUIC Long Header packets observed.
+- `quic_short_matched`: QUIC Short Header packets matched against learned CID state.
+- `quic_short_constricted`: QUIC Short Header packets actually shortened.
+- `quic_fallback`: QUIC candidates that fell back conservatively.
 
-1. Deeper TLS/QUIC policy coverage without changing capture plumbing
-2. Better `TPACKET_V3` tuning and robustness
+## Known limitations
+
+- Linux only
+- Classic PCAP output only
+- No pcapng output
+- No full TCP stream reassembly
+- TLS supports conservative `final_only` continuation behavior only
+- TLS `stream` and `bulk` policies are not supported yet
+- No TLS decryption
+- QUIC handling is invariant-header/CID based, without decryption
+- No QUIC connection migration support
+- `TPACKET_V3` backend is experimental
+- Not a replacement for `tcpdump` or Wireshark
+- Malformed or ambiguous packets fall back conservatively
+
+## Testing
+
+- Unit tests cover config parsing, PCAP I/O, decode, TLS, QUIC, and helper logic.
+- Offline feed tests validate the deterministic offline pipeline.
+- Golden PCAP compatibility tests compare constrained output byte-for-byte against inherited PcapConstrictor fixtures.
+- Manual Linux smoke testing has been done on loopback and a real interface, with both `recvmsg` and `tpacket_v3`, plus basic promiscuous-mode and live TLS checks.
