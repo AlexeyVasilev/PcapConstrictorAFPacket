@@ -83,8 +83,9 @@ Current TLS configuration keys:
 - `tls.ports`
 - `tls.app_data_keep_record_bytes`
 - `tls.app_data_continuation_keep_bytes`
+- `tls.app_data_continuation_policy`
 
-Current continuation handling is limited. This milestone constricts TLS Application Data at record level within a single TCP segment and does not implement full stream reassembly.
+AFPacket currently uses conservative TLS continuation behavior equivalent to `final_only`. Newer `stream` and `bulk` continuation policies exist in the main PcapConstrictor project, but they are not enabled in PcapConstrictorAFPacket yet.
 
 Malformed or ambiguous TLS falls back conservatively to the existing default `snaplen` / `max_capture_len` behavior.
 

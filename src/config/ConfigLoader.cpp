@@ -63,6 +63,26 @@ bool ParseBool(std::string_view value, bool& output) {
     return false;
 }
 
+bool ParseTlsAppDataContinuationPolicy(
+    std::string_view value,
+    TlsAppDataContinuationPolicy& output) {
+    const std::string lowered = ToLower(Trim(value));
+    if (lowered == "final_only") {
+        output = TlsAppDataContinuationPolicy::FinalOnly;
+        return true;
+    }
+    if (lowered == "stream") {
+        output = TlsAppDataContinuationPolicy::Stream;
+        return true;
+    }
+    if (lowered == "bulk") {
+        output = TlsAppDataContinuationPolicy::Bulk;
+        return true;
+    }
+
+    return false;
+}
+
 bool ParseUint32(std::string_view value, std::uint32_t& output) {
     const std::string trimmed = Trim(value);
     if (trimmed.empty()) {
@@ -270,6 +290,20 @@ bool AssignValue(PolicyConfig& config,
             if (!ParsePorts(value, config.tls.ports)) {
                 return invalid_value("invalid port list for tls.ports");
             }
+            return true;
+        }
+
+        if (normalized_key == "app_data_continuation_policy") {
+            TlsAppDataContinuationPolicy parsed = TlsAppDataContinuationPolicy::FinalOnly;
+            if (!ParseTlsAppDataContinuationPolicy(value, parsed)) {
+                return invalid_value(
+                    "invalid value for tls.app_data_continuation_policy; expected final_only, stream, or bulk");
+            }
+            if (parsed != TlsAppDataContinuationPolicy::FinalOnly) {
+                return invalid_value(
+                    "tls.app_data_continuation_policy values stream and bulk are not supported in PcapConstrictorAFPacket yet");
+            }
+            config.tls.app_data_continuation_policy = parsed;
             return true;
         }
 

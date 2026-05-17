@@ -12,6 +12,12 @@ enum class CaptureBackend {
     TpacketV3,
 };
 
+enum class TlsAppDataContinuationPolicy {
+    FinalOnly,
+    Stream,
+    Bulk,
+};
+
 struct PolicyConfig {
     struct GeneralOptions {
         std::uint32_t min_saved_bytes_per_packet{16};
@@ -37,6 +43,8 @@ struct PolicyConfig {
         std::vector<std::uint16_t> ports{443, 8443};
         std::uint32_t app_data_keep_record_bytes{256};
         std::uint32_t app_data_continuation_keep_bytes{64};
+        TlsAppDataContinuationPolicy app_data_continuation_policy{
+            TlsAppDataContinuationPolicy::FinalOnly};
     } tls;
 
     struct QuicOptions {

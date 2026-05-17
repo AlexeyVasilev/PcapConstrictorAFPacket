@@ -56,6 +56,10 @@ int RunConfigLoaderTests() {
         if (!defaults.config.tls.enabled || defaults.config.tls.ports.size() != 2U) {
             return Fail("TLS defaults mismatch");
         }
+        if (defaults.config.tls.app_data_continuation_policy !=
+            TlsAppDataContinuationPolicy::FinalOnly) {
+            return Fail("tls.app_data_continuation_policy default mismatch");
+        }
         if (!defaults.config.quic.enabled || defaults.config.quic.ports.size() != 1U) {
             return Fail("QUIC defaults mismatch");
         }
@@ -86,6 +90,7 @@ enabled = false
 ports = 443, 993
 app_data_keep_record_bytes = 32
 app_data_continuation_keep_bytes = 16
+app_data_continuation_policy = final_only
 
 [quic]
 enabled = 1
@@ -138,6 +143,10 @@ min_saved_bytes_per_packet = 24
         if (parsed.config.tls.enabled) {
             return Fail("tls.enabled did not parse");
         }
+        if (parsed.config.tls.app_data_continuation_policy !=
+            TlsAppDataContinuationPolicy::FinalOnly) {
+            return Fail("tls.app_data_continuation_policy did not parse");
+        }
         if (parsed.config.tls.ports.size() != 2U ||
             parsed.config.tls.ports[0] != 443U ||
             parsed.config.tls.ports[1] != 993U) {
@@ -153,6 +162,55 @@ min_saved_bytes_per_packet = 24
         }
         if (parsed.config.stats.enabled) {
             return Fail("stats.enabled did not parse");
+        }
+    }
+
+    {
+        const ConfigLoadResult parsed = ConfigLoader::LoadFromString(
+            "[tls]\napp_data_continuation_policy = final_only\n",
+            "tls-final-only.ini");
+        if (!parsed) {
+            return Fail("tls.app_data_continuation_policy=final_only should parse");
+        }
+        if (parsed.config.tls.app_data_continuation_policy !=
+            TlsAppDataContinuationPolicy::FinalOnly) {
+            return Fail("tls.app_data_continuation_policy=final_only mismatch");
+        }
+    }
+
+    {
+        const ConfigLoadResult invalid = ConfigLoader::LoadFromString(
+            "[tls]\napp_data_continuation_policy = stream\n",
+            "tls-stream.ini");
+        if (invalid) {
+            return Fail("tls.app_data_continuation_policy=stream should fail for now");
+        }
+        if (invalid.error.find("not supported") == std::string::npos) {
+            return Fail("tls.app_data_continuation_policy=stream should report unsupported");
+        }
+    }
+
+    {
+        const ConfigLoadResult invalid = ConfigLoader::LoadFromString(
+            "[tls]\napp_data_continuation_policy = bulk\n",
+            "tls-bulk.ini");
+        if (invalid) {
+            return Fail("tls.app_data_continuation_policy=bulk should fail for now");
+        }
+        if (invalid.error.find("not supported") == std::string::npos) {
+            return Fail("tls.app_data_continuation_policy=bulk should report unsupported");
+        }
+    }
+
+    {
+        const ConfigLoadResult invalid = ConfigLoader::LoadFromString(
+            "[tls]\napp_data_continuation_policy = aggressive\n",
+            "tls-invalid-policy.ini");
+        if (invalid) {
+            return Fail("invalid tls.app_data_continuation_policy should fail");
+        }
+        if (invalid.error.find("tls.app_data_continuation_policy") == std::string::npos) {
+            return Fail("invalid tls.app_data_continuation_policy should report a useful error");
         }
     }
 
