@@ -45,9 +45,12 @@ public:
     };
 
     struct DirectionState {
+        bool confirmed_tls{false};
+        bool has_seen_application_data{false};
         bool synchronized{false};
         std::uint32_t expected_tcp_seq{0};
         bool has_active_record{false};
+        std::uint8_t active_record_content_type{0};
         std::uint32_t active_record_remaining_bytes{0};
         bool active_record_constrictible{false};
     };

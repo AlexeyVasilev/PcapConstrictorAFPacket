@@ -85,7 +85,7 @@ Current TLS configuration keys:
 - `tls.app_data_continuation_keep_bytes`
 - `tls.app_data_continuation_policy`
 
-AFPacket currently uses conservative TLS continuation behavior equivalent to `final_only`. Newer `stream` and `bulk` continuation policies exist in the main PcapConstrictor project, but they are not enabled in PcapConstrictorAFPacket yet.
+AFPacket currently supports the upstream conservative TLS continuation behavior for `final_only`. Newer `stream` and `bulk` continuation policies exist in the main PcapConstrictor project, but they are only recognized and remain unsupported in PcapConstrictorAFPacket for now.
 
 Malformed or ambiguous TLS falls back conservatively to the existing default `snaplen` / `max_capture_len` behavior.
 

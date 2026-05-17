@@ -68,7 +68,7 @@ int RunLivePolicyClassificationTests() {
         std::byte{0x00},
     };
 
-    constexpr std::array<std::byte, 65> tlsAppData443{
+    const std::vector<std::byte> tlsAppDataOnly443{
         std::byte{0x00}, std::byte{0x11}, std::byte{0x22}, std::byte{0x33}, std::byte{0x44}, std::byte{0x55},
         std::byte{0x66}, std::byte{0x77}, std::byte{0x88}, std::byte{0x99}, std::byte{0xaa}, std::byte{0xbb},
         std::byte{0x08}, std::byte{0x00},
@@ -81,6 +81,25 @@ int RunLivePolicyClassificationTests() {
         std::byte{0x00}, std::byte{0x00}, std::byte{0x00}, std::byte{0x02},
         std::byte{0x50}, std::byte{0x18}, std::byte{0x20}, std::byte{0x00},
         std::byte{0x00}, std::byte{0x00}, std::byte{0x00}, std::byte{0x00},
+        std::byte{0x17}, std::byte{0x03}, std::byte{0x03}, std::byte{0x00}, std::byte{0x06},
+        std::byte{0xde}, std::byte{0xad}, std::byte{0xbe}, std::byte{0xef}, std::byte{0xca}, std::byte{0xfe},
+    };
+
+    const std::vector<std::byte> tlsHandshakeAppData443{
+        std::byte{0x00}, std::byte{0x11}, std::byte{0x22}, std::byte{0x33}, std::byte{0x44}, std::byte{0x55},
+        std::byte{0x66}, std::byte{0x77}, std::byte{0x88}, std::byte{0x99}, std::byte{0xaa}, std::byte{0xbb},
+        std::byte{0x08}, std::byte{0x00},
+        std::byte{0x45}, std::byte{0x00}, std::byte{0x00}, std::byte{0x3c}, std::byte{0x00}, std::byte{0x01},
+        std::byte{0x00}, std::byte{0x00}, std::byte{0x40}, std::byte{0x06}, std::byte{0x00}, std::byte{0x00},
+        std::byte{0x0a}, std::byte{0x00}, std::byte{0x00}, std::byte{0x01},
+        std::byte{0x0a}, std::byte{0x00}, std::byte{0x00}, std::byte{0x02},
+        std::byte{0x30}, std::byte{0x39}, std::byte{0x01}, std::byte{0xbb},
+        std::byte{0x00}, std::byte{0x00}, std::byte{0x00}, std::byte{0x01},
+        std::byte{0x00}, std::byte{0x00}, std::byte{0x00}, std::byte{0x02},
+        std::byte{0x50}, std::byte{0x18}, std::byte{0x20}, std::byte{0x00},
+        std::byte{0x00}, std::byte{0x00}, std::byte{0x00}, std::byte{0x00},
+        std::byte{0x16}, std::byte{0x03}, std::byte{0x03}, std::byte{0x00}, std::byte{0x04},
+        std::byte{0x01}, std::byte{0x02}, std::byte{0x03}, std::byte{0x04},
         std::byte{0x17}, std::byte{0x03}, std::byte{0x03}, std::byte{0x00}, std::byte{0x06},
         std::byte{0xde}, std::byte{0xad}, std::byte{0xbe}, std::byte{0xef}, std::byte{0xca}, std::byte{0xfe},
     };
@@ -150,13 +169,13 @@ int RunLivePolicyClassificationTests() {
         config.tls.app_data_keep_record_bytes = 2U;
         LiveCapturePolicy policy(config);
         const LiveCaptureDecision decision = policy.Evaluate(
-            MakePacket(std::span(tlsAppData443), static_cast<std::uint32_t>(tlsAppData443.size()), 128U));
+            MakePacket(std::span(tlsHandshakeAppData443), static_cast<std::uint32_t>(tlsHandshakeAppData443.size()), 128U));
 
         if (decision.reason != DecisionReason::TlsApplicationDataConstricted) {
-            return Fail("TLS AppData packet should report TlsApplicationDataConstricted");
+            return Fail("Confirmed TLS AppData packet should report TlsApplicationDataConstricted");
         }
-        if (decision.output_len >= tlsAppData443.size()) {
-            return Fail("TLS AppData packet should be shortened when keep bytes are small");
+        if (decision.output_len >= tlsHandshakeAppData443.size()) {
+            return Fail("Confirmed TLS AppData packet should be shortened when keep bytes are small");
         }
     }
 
@@ -168,12 +187,12 @@ int RunLivePolicyClassificationTests() {
         config.tls.app_data_keep_record_bytes = 2U;
         LiveCapturePolicy policy(config);
         const LiveCaptureDecision decision = policy.Evaluate(
-            MakePacket(std::span(tlsAppData443), static_cast<std::uint32_t>(tlsAppData443.size()), 128U));
+            MakePacket(std::span(tlsHandshakeAppData443), static_cast<std::uint32_t>(tlsHandshakeAppData443.size()), 128U));
 
         if (decision.reason != DecisionReason::TlsCandidate) {
-            return Fail("TLS AppData packet should stay at plain TlsCandidate when savings stay below the threshold");
+            return Fail("Confirmed TLS AppData packet should stay at plain TlsCandidate when savings stay below the threshold");
         }
-        if (decision.output_len != tlsAppData443.size()) {
+        if (decision.output_len != tlsHandshakeAppData443.size()) {
             return Fail("min_saved_bytes_per_packet should block tiny TLS constrictions");
         }
     }
@@ -196,7 +215,7 @@ int RunLivePolicyClassificationTests() {
         config.tls.app_data_keep_record_bytes = 2U;
         LiveCapturePolicy policy(config);
         const LiveCaptureDecision decision = policy.Evaluate(
-            MakePacket(std::span(tlsAppData443), static_cast<std::uint32_t>(tlsAppData443.size()), 128U));
+            MakePacket(std::span(tlsHandshakeAppData443), static_cast<std::uint32_t>(tlsHandshakeAppData443.size()), 128U));
 
         if (decision.reason != DecisionReason::Tcp) {
             return Fail("TLS payload should stay plain Tcp when TLS is disabled");
@@ -209,10 +228,27 @@ int RunLivePolicyClassificationTests() {
         config.tls.app_data_keep_record_bytes = 2U;
         LiveCapturePolicy policy(config);
         const LiveCaptureDecision decision = policy.Evaluate(
-            MakePacket(std::span(tlsAppData443), static_cast<std::uint32_t>(tlsAppData443.size()), 128U));
+            MakePacket(std::span(tlsHandshakeAppData443), static_cast<std::uint32_t>(tlsHandshakeAppData443.size()), 128U));
 
         if (decision.reason != DecisionReason::Tcp) {
             return Fail("TLS payload should stay plain Tcp when port is not configured");
+        }
+    }
+
+    {
+        PolicyConfig config;
+        config.capture.default_snaplen = 256U;
+        config.capture.max_capture_len = 256U;
+        config.tls.app_data_keep_record_bytes = 2U;
+        LiveCapturePolicy policy(config);
+        const LiveCaptureDecision decision = policy.Evaluate(
+            MakePacket(std::span(tlsAppDataOnly443), static_cast<std::uint32_t>(tlsAppDataOnly443.size()), 128U));
+
+        if (decision.reason != DecisionReason::TlsNoRecordFallback) {
+            return Fail("Unconfirmed TLS AppData-only payload should report TlsNoRecordFallback under final_only");
+        }
+        if (decision.output_len != tlsAppDataOnly443.size()) {
+            return Fail("Unconfirmed TLS AppData-only payload should keep the full packet");
         }
     }
 
@@ -245,8 +281,8 @@ int RunLivePolicyClassificationTests() {
         const LiveCaptureDecision decision = policy.Evaluate(
             MakePacket(std::span(truncatedTls443), static_cast<std::uint32_t>(truncatedTls443.size()), 128U));
 
-        if (decision.reason != DecisionReason::TlsMalformedFallback) {
-            return Fail("Truncated TLS record should report TlsMalformedFallback");
+        if (decision.reason != DecisionReason::TlsNoRecordFallback) {
+            return Fail("Truncated unsynchronized TLS record should report TlsNoRecordFallback");
         }
     }
 

@@ -16,6 +16,8 @@ bool PortConfigured(const std::vector<std::uint16_t>& ports, const std::uint16_t
     return std::find(ports.begin(), ports.end(), port) != ports.end();
 }
 
+constexpr std::uint8_t kTcpSynOrRstFlags = 0x06U;
+
 std::uint32_t ApplyMinimumSavingsThreshold(const std::uint32_t baseline_output_len,
                                            const std::uint32_t candidate_output_len,
                                            const std::uint32_t min_saved_bytes_per_packet) noexcept {
@@ -120,7 +122,7 @@ LiveCaptureDecision LiveCapturePolicy::Evaluate(const CapturedPacket& packet) no
     if (!malformed &&
         decoded.failure_reason == PacketDecodeFailureReason::None &&
         reason == DecisionReason::TlsCandidate &&
-        decoded.transport_payload_length > 0U) {
+        (decoded.transport_payload_length > 0U || (decoded.tcp_flags & kTcpSynOrRstFlags) != 0U)) {
         const TlsConstrictResult tls_result = tls_constrictor_.Evaluate(
             std::span<const std::byte>(packet.data().data(), safe_captured_len),
             decoded,

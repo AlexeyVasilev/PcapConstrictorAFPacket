@@ -99,6 +99,7 @@ void DecodeTcp(PacketDecodeResult& result,
         static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(packet[transport_offset + 5U])) << 16U |
         static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(packet[transport_offset + 6U])) << 8U |
         static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(packet[transport_offset + 7U]));
+    result.tcp_flags = std::to_integer<std::uint8_t>(packet[transport_offset + 13U]);
 }
 
 void DecodeUdp(PacketDecodeResult& result,

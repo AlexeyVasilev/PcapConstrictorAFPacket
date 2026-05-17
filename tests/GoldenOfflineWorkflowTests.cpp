@@ -190,6 +190,8 @@ int run_golden_pipeline_test(const std::string_view scenario_name) {
         const std::string source_config_text = ReadTextFile(source_config);
         std::ostringstream generated;
         generated << FilterConstrictConfigSections(source_config_text)
+                  << "\n[tls]\n"
+                  << "app_data_continuation_policy = final_only\n"
                   << "\n[capture]\n"
                   << "default_snaplen = " << input_snaplen << '\n'
                   << "max_capture_len = " << input_snaplen << '\n'
