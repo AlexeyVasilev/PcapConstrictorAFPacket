@@ -170,3 +170,7 @@ The final stats block may include:
 - Offline feed tests validate the deterministic offline pipeline.
 - Golden PCAP compatibility tests compare constrained output byte-for-byte against inherited PcapConstrictor fixtures.
 - Manual Linux smoke testing has been done on loopback and a real interface, with both `recvmsg` and `tpacket_v3`, plus basic promiscuous-mode and live TLS checks.
+
+## License
+
+Apache License 2.0. See [LICENSE]
