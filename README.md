@@ -173,4 +173,6 @@ The final stats block may include:
 
 ## License
 
-Apache License 2.0. See [LICENSE]
+Apache License 2.0. See [LICENSE](LICENSE).
+
+Copyright 2026 Alexey Vasilev.
