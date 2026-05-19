@@ -1,22 +1,29 @@
 # PcapConstrictorAFPacket
 
-PcapConstrictorAFPacket is a Linux AF_PACKET live recorder with TLS/QUIC-aware adaptive PCAP capture. It is intended to reuse richer PcapConstrictor-style policy in userspace, without eBPF verifier constraints.
+PcapConstrictorAFPacket is the practical Linux userspace live recorder in the PcapConstrictor project family. It captures packets from live Linux interfaces with AF_PACKET and applies PcapConstrictor-style TLS/QUIC-aware adaptive PCAP capture in userspace.
 
-## Related projects
+Compared with the main offline tool, it has a smaller policy surface today, but it is intended to be the practical Linux live-capture path without eBPF verifier constraints.
 
-- `PcapConstrictor`: the main offline PCAP/PCAPNG constriction tool.
-- `PcapConstrictorBPF`: an experimental Linux TC eBPF recorder.
-- `PcapConstrictorAFPacket`: a userspace Linux live recorder built around AF_PACKET capture.
+## Project family
+
+| Project | Role | Use when |
+|---|---|---|
+| [PcapConstrictor](https://github.com/AlexeyVasilev/PcapConstrictor) | Main offline PCAP/PCAPNG constriction tool | You already have capture files and want the richest policy support, including TLS `final_only`/`stream`/`bulk`, QUIC, PCAPNG, reinflate/restore, checksum policies, stats, and decision logs. |
+| [PcapConstrictorAFPacket](https://github.com/AlexeyVasilev/PcapConstrictorAFPacket) | Linux AF_PACKET live recorder | You want practical Linux live capture with userspace PcapConstrictor-style policy. Supports TLS `final_only` and QUIC CID-aware short-header constriction, but not TLS `stream`/`bulk`. |
+| [PcapConstrictorWinPacket](https://github.com/AlexeyVasilev/PcapConstrictorWinPacket) | Windows Npcap/libpcap live recorder | You want practical Windows live capture with Npcap and a policy scope similar to AFPacket. Supports TLS `final_only` and QUIC known-DCID constriction, but not TLS `stream`/`bulk`. |
+| [PcapConstrictorBPF](https://github.com/AlexeyVasilev/PcapConstrictorBPF) | Experimental Linux TC eBPF recorder | You want a research eBPF project demonstrating TC hooks, BPF maps, verifier-friendly parsing, and a much smaller live-capture policy subset. |
 
 ## Current status
 
 The project is experimental but functional.
 
 - Live capture has been smoke-tested on loopback and a real interface.
-- Both `recvmsg` and `tpacket_v3` backends are available.
+- Both `recvmsg` and `tpacket_v3` / `PACKET_MMAP` backends are available.
 - Optional promiscuous mode, bounded capture, clean shutdown, and final stats are implemented.
 - TLS `final_only` continuation behavior is aligned with the current upstream PcapConstrictor runtime behavior.
 - TLS `stream` and `bulk` policies are recognized in config but are not supported yet.
+- QUIC matched short-header constriction is intended to stay close to PcapConstrictor behavior for learned-CID flows.
+- For practical Linux live capture, this project is the main userspace recorder; the BPF project is narrower and more experimental.
 
 ## Features
 
@@ -33,6 +40,8 @@ The project is experimental but functional.
 - Ethernet/VLAN/IPv4/IPv6/TCP/UDP decode
 - TLS Application Data constriction with upstream-compatible `final_only` continuation handling
 - QUIC Long Header CID learning and matched Short Header constriction
+
+This repository writes classic PCAP, supports offline compatibility mode for deterministic regression testing, and intentionally does not claim the full offline policy scope of `PcapConstrictor`.
 
 ## Basic usage
 
@@ -127,6 +136,7 @@ QUIC:
 
 - Current handling is invariant-header/CID based.
 - The policy learns source CIDs from Long Header packets and constricts only matched Short Header packets.
+- For matched short-header packets, the goal is to stay close to PcapConstrictor behavior while remaining practical for live userspace capture.
 - Unknown, malformed, unmapped, or mismatched packets fall back conservatively.
 - No QUIC decryption or connection migration support is implemented.
 
@@ -163,6 +173,7 @@ The final stats block may include:
 - `TPACKET_V3` backend is experimental
 - Not a replacement for `tcpdump` or Wireshark
 - Malformed or ambiguous packets fall back conservatively
+- Fewer policy modes than the main `PcapConstrictor` offline tool
 
 ## Testing
 
@@ -174,5 +185,4 @@ The final stats block may include:
 ## License
 
 Apache License 2.0. See [LICENSE](LICENSE).
-
 Copyright 2026 Alexey Vasilev.
